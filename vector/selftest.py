@@ -126,18 +126,9 @@ def check_start_menu() -> str:
 def check_volume() -> str:
     if platform.system() != "Windows":
         raise Skip("Windows only")
-    from pycaw.pycaw import AudioUtilities
+    from vector.skills.system import windows_endpoint_volume
 
-    speakers = AudioUtilities.GetSpeakers()
-    endpoint = getattr(speakers, "EndpointVolume", None)
-    if endpoint is None:
-        from ctypes import POINTER, cast
-
-        from comtypes import CLSCTX_ALL
-        from pycaw.pycaw import IAudioEndpointVolume
-
-        endpoint = cast(speakers.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None),
-                        POINTER(IAudioEndpointVolume))
+    endpoint = windows_endpoint_volume()
     original = endpoint.GetMasterVolumeLevelScalar()
     from vector.skills.system import set_volume
 
@@ -243,6 +234,9 @@ def check_agent_uses_tools(config) -> str:
 
 
 def run_selftest(config, interactive: bool = True) -> int:
+    from vector.brain import BrainError
+    from vector.skills.system import NoAudioDevice
+
     checks: list[tuple[str, Callable[[], str]]] = [
         ("Python version", check_python),
         ("Skills load", check_skills),
@@ -276,7 +270,9 @@ def run_selftest(config, interactive: bool = True) -> int:
         except Exception as exc:
             msg = str(exc) or exc.__class__.__name__
             print(f"{RED}FAIL{RESET}  {msg}")
-            failures.append((name, traceback.format_exc()))
+            # Our own friendly errors already say what to do; only keep tracebacks for surprises.
+            if not isinstance(exc, (BrainError, NoAudioDevice)):
+                failures.append((name, traceback.format_exc()))
             failed += 1
     print(f"\n  {passed} passed, {failed} failed, {skipped} skipped")
     if failures:

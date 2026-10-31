@@ -38,26 +38,41 @@ def system_status() -> str:
     return "\n".join(lines)
 
 
-def _windows_set_volume(level: int) -> bool:
-    """Set the exact master volume with pycaw (Windows Core Audio). False if unavailable."""
+class NoAudioDevice(RuntimeError):
+    pass
+
+
+def windows_endpoint_volume():
+    """The Windows master-volume control (pycaw). Raises ImportError or NoAudioDevice."""
+    from pycaw.pycaw import AudioUtilities
+
     try:
-        from pycaw.pycaw import AudioUtilities
-
         speakers = AudioUtilities.GetSpeakers()
-        endpoint = getattr(speakers, "EndpointVolume", None)  # pycaw 2025+
-        if endpoint is None:  # older pycaw releases
-            from ctypes import POINTER, cast
+    except Exception as exc:  # comtypes COMError "Element not found": nothing to play sound on
+        raise NoAudioDevice("No speakers or headphones found. Check your sound output.") from exc
+    if speakers is None:
+        raise NoAudioDevice("No speakers or headphones found. Check your sound output.")
+    endpoint = getattr(speakers, "EndpointVolume", None)  # pycaw 2025+
+    if endpoint is None:  # older pycaw releases
+        from ctypes import POINTER, cast
 
-            from comtypes import CLSCTX_ALL
-            from pycaw.pycaw import IAudioEndpointVolume
+        from comtypes import CLSCTX_ALL
+        from pycaw.pycaw import IAudioEndpointVolume
 
-            interface = speakers.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-            endpoint = cast(interface, POINTER(IAudioEndpointVolume))
-        endpoint.SetMasterVolumeLevelScalar(level / 100, None)
-        endpoint.SetMute(1 if level == 0 else 0, None)
-        return True
-    except Exception:  # pycaw missing, or no audio device
+        interface = speakers.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+        endpoint = cast(interface, POINTER(IAudioEndpointVolume))
+    return endpoint
+
+
+def _windows_set_volume(level: int) -> bool:
+    """Set the exact master volume. False if pycaw is missing; raises NoAudioDevice."""
+    try:
+        endpoint = windows_endpoint_volume()
+    except ImportError:
         return False
+    endpoint.SetMasterVolumeLevelScalar(level / 100, None)
+    endpoint.SetMute(1 if level == 0 else 0, None)
+    return True
 
 
 @tool
@@ -77,7 +92,11 @@ def set_volume(level: int) -> str:
         else:
             return "No volume tool found (install pulseaudio-utils or alsa-utils)."
     elif IS_WINDOWS:
-        if not _windows_set_volume(level):
+        try:
+            exact = _windows_set_volume(level)
+        except NoAudioDevice as exc:
+            return str(exc)
+        if not exact:
             # No pycaw: tap the volume keys (each press is 2%).
             presses = f"1..{level // 2} | % {{ $w.SendKeys([char]175) }};" if level >= 2 else ""
             powershell(

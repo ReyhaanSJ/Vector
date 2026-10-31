@@ -119,3 +119,12 @@ def test_helpers_do_not_crash():
     notify("VECTOR test", "hello from CI")
     assert isinstance(wifi_status(), str)
     assert "CPU" in system_status()
+
+
+@windows_only
+def test_set_volume_gives_clear_answer():
+    from vector.skills.system import set_volume
+
+    out = set_volume(40)
+    # CI machines have no speakers; a real laptop sets it. Either way: no crash, no false claim.
+    assert out in {"Volume set to 40%.", "No speakers or headphones found. Check your sound output."}
