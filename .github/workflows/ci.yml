@@ -10,8 +10,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest]
         python: ["3.11", "3.13"]
+        include:
+          # macOS minutes cost 10x on private repos, so test just one version there.
+          - os: macos-latest
+            python: "3.13"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -20,3 +24,5 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: pytest -q
+      - run: vector --selftest
+        continue-on-error: true  # CI has no AI key, sound or screen; this just shows the report

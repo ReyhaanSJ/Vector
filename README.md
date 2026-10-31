@@ -11,6 +11,8 @@ Windows · macOS · Linux · Claude or fully local (Ollama) · MIT licensed
 
 </div>
 
+> **Pre-release:** VECTOR is still being tested and isn't ready for general use yet.
+
 ---
 
 ## Features
@@ -83,6 +85,7 @@ vector                          # chat by typing
 vector --voice                  # hands-free: "Vector, open Spotify"
 vector open my downloads folder # one-shot command
 vector --list-skills            # see everything it can do
+vector --selftest               # check everything works on your computer
 ```
 
 In chat: `/help`, `/skills`, `/reset` (start a fresh conversation), `/exit`.

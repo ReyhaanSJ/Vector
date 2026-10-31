@@ -5,6 +5,7 @@
     vector "open spotify"       run a single command and exit
     vector --setup              create ~/.vector/config.toml
     vector --list-skills        show everything VECTOR can do
+    vector --selftest           check that everything works on this computer
     vector --startup on         start VECTOR (voice mode) when you log in (Windows)
 """
 
@@ -76,6 +77,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--yes", action="store_true", help="don't ask before risky actions (careful!)")
     p.add_argument("--setup", action="store_true", help="write a default config file")
     p.add_argument("--list-skills", action="store_true", help="list available skills")
+    p.add_argument("--selftest", action="store_true", help="check that everything works on this computer")
     p.add_argument("--startup", choices=["on", "off", "text"],
                    help="Windows: launch VECTOR at login (on = voice, text = typing, off = remove)")
     p.add_argument("--version", action="version", version=f"VECTOR {__version__}")
@@ -106,6 +108,11 @@ def main(argv: list[str] | None = None) -> int:
         config.model = args.model
     if args.yes:
         config.confirm_dangerous = False
+
+    if args.selftest:
+        from vector.selftest import run_selftest
+
+        return run_selftest(config, interactive=sys.stdin.isatty())
 
     from vector.agent import Vector
     from vector.brain import BrainError, create_brain
