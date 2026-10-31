@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import platform
+import sys
 import traceback
 from collections.abc import Callable
 from pathlib import Path
@@ -22,7 +23,7 @@ SYSTEM_PROMPT = """\
 You are VECTOR, a personal AI assistant that runs on {user}'s computer and can control it \
 through the tools provided - in the spirit of a capable, loyal, slightly witty AI butler.
 
-Computer: {os} | Home folder: {home} | Now: {now}
+Computer: {os} | Home folder: {home} | Shell: {shell} | Now: {now}
 
 How to behave:
 - Act, don't just describe: when asked to do something on the computer, use the tools to do it.
@@ -37,6 +38,14 @@ be read aloud. Address the user as {user} occasionally, not every message.
 Things you remember about {user}:
 {memory}
 """
+
+
+def _os_name() -> str:
+    if platform.system() == "Windows":
+        # Windows 11 still reports release "10"; build 22000+ is Windows 11.
+        build = sys.getwindowsversion().build  # type: ignore[attr-defined]
+        return f"Windows {'11' if build >= 22000 else '10'} (build {build})"
+    return f"{platform.system()} {platform.release()}"
 
 
 class Vector:
@@ -64,7 +73,8 @@ class Vector:
 
         return SYSTEM_PROMPT.format(
             user=self.config.user_name,
-            os=f"{platform.system()} {platform.release()}",
+            os=_os_name(),
+            shell="PowerShell" if platform.system() == "Windows" else "sh/bash",
             home=Path.home(),
             # Date + hour only, so the prompt stays stable (cacheable) within the hour.
             now=dt.datetime.now().strftime("%A %d %B %Y, around %I %p"),

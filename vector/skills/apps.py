@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import functools
+import json
 import shutil
 import urllib.parse
 import webbrowser
@@ -9,23 +11,77 @@ from pathlib import Path
 
 import psutil
 
-from vector.osutil import IS_MAC, IS_WINDOWS, open_with_default_app, run, spawn
+from vector.osutil import IS_MAC, IS_WINDOWS, open_with_default_app, powershell, run, spawn
 from vector.registry import tool
 
-# Friendly names -> the command/app name on each OS. Add your own via a custom skill.
+# Friendly names -> the app's name on each OS. On Windows this is the Start-menu name.
 APP_ALIASES: dict[str, dict[str, str]] = {
-    "chrome": {"windows": "chrome", "mac": "Google Chrome", "linux": "google-chrome"},
-    "firefox": {"windows": "firefox", "mac": "Firefox", "linux": "firefox"},
-    "vscode": {"windows": "code", "mac": "Visual Studio Code", "linux": "code"},
-    "code": {"windows": "code", "mac": "Visual Studio Code", "linux": "code"},
-    "terminal": {"windows": "wt", "mac": "Terminal", "linux": "x-terminal-emulator"},
-    "notepad": {"windows": "notepad", "mac": "TextEdit", "linux": "gedit"},
-    "calculator": {"windows": "calc", "mac": "Calculator", "linux": "gnome-calculator"},
-    "spotify": {"windows": "spotify", "mac": "Spotify", "linux": "spotify"},
-    "discord": {"windows": "discord", "mac": "Discord", "linux": "discord"},
-    "slack": {"windows": "slack", "mac": "Slack", "linux": "slack"},
+    "chrome": {"windows": "Google Chrome", "mac": "Google Chrome", "linux": "google-chrome"},
+    "edge": {"windows": "Microsoft Edge", "mac": "Microsoft Edge", "linux": "microsoft-edge"},
+    "firefox": {"windows": "Firefox", "mac": "Firefox", "linux": "firefox"},
+    "vscode": {"windows": "Visual Studio Code", "mac": "Visual Studio Code", "linux": "code"},
+    "vs code": {"windows": "Visual Studio Code", "mac": "Visual Studio Code", "linux": "code"},
+    "code": {"windows": "Visual Studio Code", "mac": "Visual Studio Code", "linux": "code"},
+    "terminal": {"windows": "Terminal", "mac": "Terminal", "linux": "x-terminal-emulator"},
+    "cmd": {"windows": "Command Prompt", "mac": "Terminal", "linux": "x-terminal-emulator"},
+    "notepad": {"windows": "Notepad", "mac": "TextEdit", "linux": "gedit"},
+    "calculator": {"windows": "Calculator", "mac": "Calculator", "linux": "gnome-calculator"},
+    "word": {"windows": "Word", "mac": "Microsoft Word", "linux": "libreoffice --writer"},
+    "excel": {"windows": "Excel", "mac": "Microsoft Excel", "linux": "libreoffice --calc"},
+    "powerpoint": {"windows": "PowerPoint", "mac": "Microsoft PowerPoint", "linux": "libreoffice --impress"},
+    "teams": {"windows": "Microsoft Teams", "mac": "Microsoft Teams", "linux": "teams"},
+    "spotify": {"windows": "Spotify", "mac": "Spotify", "linux": "spotify"},
+    "discord": {"windows": "Discord", "mac": "Discord", "linux": "discord"},
+    "slack": {"windows": "Slack", "mac": "Slack", "linux": "slack"},
+    "task manager": {"windows": "Task Manager", "mac": "Activity Monitor", "linux": "gnome-system-monitor"},
     "settings": {"windows": "ms-settings:", "mac": "System Settings", "linux": "gnome-control-center"},
 }
+
+
+@functools.lru_cache(maxsize=1)
+def windows_start_apps() -> tuple[tuple[str, str], ...]:
+    """Every app in the Windows Start menu as (name, AppID), including Microsoft Store apps."""
+    result = powershell("Get-StartApps | Select-Object Name, AppID | ConvertTo-Json -Compress")
+    try:
+        data = json.loads(result.stdout or "[]")
+    except ValueError:
+        return ()
+    if isinstance(data, dict):
+        data = [data]
+    return tuple((d["Name"], d["AppID"]) for d in data if d.get("Name") and d.get("AppID"))
+
+
+def best_app_match(query: str, apps) -> tuple[str, str] | None:
+    """Pick the app whose name best matches what the user said."""
+    q = query.lower().strip()
+    if not q:
+        return None
+    names = [(name.lower(), (name, app_id)) for name, app_id in apps]
+    for test in (
+        lambda n: n == q,
+        lambda n: n.startswith(q),
+        lambda n: any(word.startswith(q) for word in n.split()),
+        lambda n: q in n,
+    ):
+        hits = [app for n, app in names if test(n)]
+        if hits:
+            return min(hits, key=lambda app: len(app[0]))  # shortest = least specific match
+    return None
+
+
+def _open_windows_app(name: str, target: str) -> str:
+    if target.endswith(":"):  # a URI like ms-settings:
+        open_with_default_app(target)
+        return f"Opened {name}."
+    match = best_app_match(target, windows_start_apps()) or best_app_match(name, windows_start_apps())
+    if match:
+        app_name, app_id = match
+        spawn(["explorer.exe", f"shell:AppsFolder\\{app_id}"])
+        return f"Opened {app_name}."
+    if shutil.which(target) or shutil.which(name):
+        spawn(f'start "" "{shutil.which(target) or shutil.which(name)}"', shell=True)
+        return f"Opened {name}."
+    return f"Couldn't find an app called '{name}' in the Start menu. Is it installed?"
 
 SEARCH_ENGINES = {
     "google": "https://www.google.com/search?q={}",
@@ -43,7 +99,7 @@ def _os_key() -> str:
 
 @tool
 def open_app(name: str) -> str:
-    """Open an application on the computer, e.g. "chrome", "spotify", "vscode", "terminal".
+    """Open any installed application, e.g. "chrome", "spotify", "vscode", "word", "terminal".
 
     name: The app's name as the user said it.
     """
@@ -61,10 +117,7 @@ def open_app(name: str) -> str:
             if result.returncode != 0:
                 return f"Couldn't find an app called '{name}' ({result.stderr.strip()})"
         elif IS_WINDOWS:
-            if target.endswith(":"):
-                open_with_default_app(target)
-            else:
-                spawn(f'start "" "{target}"', shell=True)
+            return _open_windows_app(name, target)
         else:
             parts = target.split()
             if not shutil.which(parts[0]):

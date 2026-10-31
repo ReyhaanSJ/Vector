@@ -7,19 +7,11 @@ import os
 import shutil
 from pathlib import Path
 
-from vector.osutil import open_with_default_app
+from vector.osutil import open_with_default_app, personal_folders
 from vector.registry import tool
 
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", "AppData", "Library", ".cache"}
-SHORTCUTS = {
-    "home": Path.home(),
-    "desktop": Path.home() / "Desktop",
-    "documents": Path.home() / "Documents",
-    "downloads": Path.home() / "Downloads",
-    "pictures": Path.home() / "Pictures",
-    "music": Path.home() / "Music",
-    "videos": Path.home() / "Videos",
-}
+SHORTCUTS = personal_folders()
 
 
 def resolve(path: str) -> Path:

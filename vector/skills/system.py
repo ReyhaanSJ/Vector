@@ -9,7 +9,7 @@ from pathlib import Path
 
 import psutil
 
-from vector.osutil import IS_LINUX, IS_MAC, IS_WINDOWS, run
+from vector.osutil import IS_LINUX, IS_MAC, IS_WINDOWS, personal_folders, powershell, ps_quote, run
 from vector.registry import tool
 
 
@@ -38,6 +38,28 @@ def system_status() -> str:
     return "\n".join(lines)
 
 
+def _windows_set_volume(level: int) -> bool:
+    """Set the exact master volume with pycaw (Windows Core Audio). False if unavailable."""
+    try:
+        from pycaw.pycaw import AudioUtilities
+
+        speakers = AudioUtilities.GetSpeakers()
+        endpoint = getattr(speakers, "EndpointVolume", None)  # pycaw 2025+
+        if endpoint is None:  # older pycaw releases
+            from ctypes import POINTER, cast
+
+            from comtypes import CLSCTX_ALL
+            from pycaw.pycaw import IAudioEndpointVolume
+
+            interface = speakers.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            endpoint = cast(interface, POINTER(IAudioEndpointVolume))
+        endpoint.SetMasterVolumeLevelScalar(level / 100, None)
+        endpoint.SetMute(1 if level == 0 else 0, None)
+        return True
+    except Exception:  # pycaw missing, or no audio device
+        return False
+
+
 @tool
 def set_volume(level: int) -> str:
     """Set the speaker volume.
@@ -55,17 +77,13 @@ def set_volume(level: int) -> str:
         else:
             return "No volume tool found (install pulseaudio-utils or alsa-utils)."
     elif IS_WINDOWS:
-        # Press the volume-down key 50 times (to 0) then up level/2 times (each press = 2%).
-        ps = (
-            "$w = New-Object -ComObject WScript.Shell;"
-            "1..50 | % { $w.SendKeys([char]174) };"
-            f"1..{level // 2} | % {{ $w.SendKeys([char]175) }}"
-        )
-        if level >= 2:
-            run(["powershell", "-NoProfile", "-Command", ps])
-        else:
-            run(["powershell", "-NoProfile", "-Command",
-                 "$w = New-Object -ComObject WScript.Shell; 1..50 | % { $w.SendKeys([char]174) }"])
+        if not _windows_set_volume(level):
+            # No pycaw: tap the volume keys (each press is 2%).
+            presses = f"1..{level // 2} | % {{ $w.SendKeys([char]175) }};" if level >= 2 else ""
+            powershell(
+                "$w = New-Object -ComObject WScript.Shell;"
+                "1..50 | % { $w.SendKeys([char]174) };" + presses
+            )
     return f"Volume set to {level}%."
 
 
@@ -91,7 +109,7 @@ def take_screenshot(filename: str = "") -> str:
 
     filename: Optional file name; defaults to a timestamp.
     """
-    folder = Path.home() / "Pictures" / "VECTOR"
+    folder = personal_folders()["pictures"] / "VECTOR"
     folder.mkdir(parents=True, exist_ok=True)
     name = filename or f"screenshot-{dt.datetime.now():%Y%m%d-%H%M%S}.png"
     if not name.lower().endswith(".png"):
@@ -102,7 +120,16 @@ def take_screenshot(filename: str = "") -> str:
 
         pyautogui.screenshot(str(path))
     except ImportError:
-        if IS_MAC:
+        if IS_WINDOWS:
+            powershell(
+                "Add-Type -AssemblyName System.Windows.Forms, System.Drawing;"
+                "$b = [System.Windows.Forms.SystemInformation]::VirtualScreen;"
+                "$bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height;"
+                "$g = [System.Drawing.Graphics]::FromImage($bmp);"
+                "$g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size);"
+                f"$bmp.Save({ps_quote(str(path))}); $g.Dispose(); $bmp.Dispose()"
+            )
+        elif IS_MAC:
             run(["screencapture", "-x", str(path)])
         elif IS_LINUX and shutil.which("gnome-screenshot"):
             run(["gnome-screenshot", "-f", str(path)])
@@ -115,13 +142,17 @@ def take_screenshot(filename: str = "") -> str:
 
 @tool(dangerous=True)
 def run_shell_command(command: str, timeout_seconds: int = 60) -> str:
-    """Run a shell/terminal command and return its output. Use for tasks no other skill covers.
+    """Run a terminal command and return its output. Use for tasks no other skill covers.
+    On Windows the command runs in PowerShell; elsewhere in the default shell (sh/bash).
 
     command: The exact command to run.
     timeout_seconds: Give up after this many seconds.
     """
     try:
-        result = run(command, shell=True, timeout=timeout_seconds)
+        if IS_WINDOWS:
+            result = powershell(command, timeout=timeout_seconds)
+        else:
+            result = run(command, shell=True, timeout=timeout_seconds)
     except Exception as exc:
         return f"Command failed to run: {exc}"
     out = (result.stdout or "") + (("\n[stderr]\n" + result.stderr) if result.stderr else "")
@@ -139,7 +170,7 @@ def power_action(action: str) -> str:
     """
     action = action.lower()
     commands = {
-        "windows": {"shutdown": "shutdown /s /t 0", "restart": "shutdown /r /t 0",
+        "windows": {"shutdown": "shutdown /s /t 5", "restart": "shutdown /r /t 5",
                     "sleep": "rundll32.exe powrprof.dll,SetSuspendState 0,1,0"},
         "mac": {"shutdown": "osascript -e 'tell app \"System Events\" to shut down'",
                 "restart": "osascript -e 'tell app \"System Events\" to restart'",

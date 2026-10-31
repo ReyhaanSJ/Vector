@@ -5,15 +5,25 @@
     vector "open spotify"       run a single command and exit
     vector --setup              create ~/.vector/config.toml
     vector --list-skills        show everything VECTOR can do
+    vector --startup on         start VECTOR (voice mode) when you log in (Windows)
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from vector import __version__
 from vector.config import config_path, load_config, write_default_config
+
+if sys.platform == "win32":
+    os.system("")  # turn on colour codes in older Windows consoles
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
 
 CYAN, DIM, YELLOW, RED, RESET = "\033[96m", "\033[2m", "\033[93m", "\033[91m", "\033[0m"
 if not sys.stdout.isatty():
@@ -66,6 +76,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--yes", action="store_true", help="don't ask before risky actions (careful!)")
     p.add_argument("--setup", action="store_true", help="write a default config file")
     p.add_argument("--list-skills", action="store_true", help="list available skills")
+    p.add_argument("--startup", choices=["on", "off", "text"],
+                   help="Windows: launch VECTOR at login (on = voice, text = typing, off = remove)")
     p.add_argument("--version", action="version", version=f"VECTOR {__version__}")
     return p
 
@@ -83,6 +95,9 @@ def main(argv: list[str] | None = None) -> int:
         path = write_default_config()
         print(f"Config file: {path}\nEdit it to set your name, AI provider and more.")
         return 0
+
+    if args.startup:
+        return set_startup(args.startup)
 
     config = load_config()
     if args.provider:
@@ -117,6 +132,21 @@ def main(argv: list[str] | None = None) -> int:
     if args.voice:
         return voice_loop(vector)
     return text_loop(vector)
+
+
+def set_startup(mode: str) -> int:
+    from vector import startup
+
+    if not startup.supported():
+        print("Start-at-login is only set up for Windows so far. PRs welcome!")
+        return 1
+    if mode == "off":
+        removed = startup.disable()
+        print("VECTOR will no longer start at login." if removed else "VECTOR wasn't set to start at login.")
+    else:
+        path = startup.enable(voice=(mode == "on"))
+        print(f"VECTOR will start when you log in ({path}).\nUndo with: vector --startup off")
+    return 0
 
 
 def text_loop(vector) -> int:

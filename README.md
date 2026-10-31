@@ -17,20 +17,33 @@ Windows · macOS · Linux · Claude or fully local (Ollama) · MIT licensed
 
 - **Natural language control.** Ask in plain English. The AI picks and chains the right skills.
 - **Voice mode.** Hands-free with a wake word (*"Vector, ..."*) and spoken replies.
-- **31 built-in skills:**
+- **31 built-in skills, plus 6 more on Windows** (dark mode, brightness, Settings pages, Wi-Fi, show desktop, Recycle Bin):
   | Area | Skills |
   |---|---|
-  | Apps & web | open/close apps, open websites, search Google/YouTube/GitHub/Maps, list running apps |
+  | Apps & web | open/close apps (on Windows, any Start-menu or Store app), open websites, search Google/YouTube/GitHub/Maps, list running apps |
   | Files | list, find, open, read, write, create folders, move/rename, delete, **auto-organize a folder** |
   | System | battery/CPU/RAM/disk status, volume, lock screen, screenshots, shutdown/restart/sleep, run shell commands |
   | Productivity | reminders, desktop notifications, clipboard read/write, long-term memory (remember/recall/forget) |
   | Control | type text, keyboard shortcuts, media play/pause/next |
+- **Start with your PC.** `vector --startup on` (Windows) launches it in voice mode at login.
 - **Safe by default.** Anything that changes your system (shell commands, deleting or moving files, typing keys, closing apps, power actions) **asks you first**.
 - **Remembers you.** Tell it *"remember my project folder is ~/code/robot"* and it'll know next time.
 - **Pick your brain.** Claude (best results) or a **free, private, offline** model through [Ollama](https://ollama.com).
 - **Easy to extend.** A new skill is one Python function with a `@tool` decorator.
 
 ## Quick start
+
+### Windows 10/11 (one command)
+
+```powershell
+git clone https://github.com/reyhaansj/vector.git
+cd vector
+powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1
+```
+
+The full Windows guide, Windows-only skills and troubleshooting are in **[docs/windows.md](docs/windows.md)**.
+
+### macOS / Linux / manual install
 
 Requires **Python 3.11+**.
 
