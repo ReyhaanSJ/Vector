@@ -288,9 +288,10 @@ class Speaker:
 class VoiceEngine:
     """Wake word -> record -> transcribe, plus speaking. Use as a context manager."""
 
-    def __init__(self, wake_word: str = "vector", whisper_model: str = "base.en", speak: bool = True):
+    def __init__(self, wake_word: str = "vector", whisper_model: str = "base.en", speak: bool = True,
+                 mic=None):
         self.wake_word = wake_word.lower()
-        self.mic = Microphone()
+        self.mic = mic if mic is not None else Microphone()
         self.transcriber = Transcriber(whisper_model)
         self.speaker = Speaker(speak)
         self.noise_floor = 200.0

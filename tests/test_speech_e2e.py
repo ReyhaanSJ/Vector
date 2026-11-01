@@ -1,10 +1,12 @@
-"""End-to-end speech test: Windows' own voice says a command into a WAV file, and VECTOR's
-wake-word spotter and Whisper transcriber must understand it. Opt-in (downloads ~200 MB):
+"""End-to-end speech test: Windows' own voice speaks a command into a WAV file, which is
+played through VECTOR's real listening pipeline (wake word -> record -> Whisper) via a fake
+microphone. Opt-in because it downloads ~200 MB of models:
     VECTOR_SPEECH_E2E=1 pytest tests/test_speech_e2e.py
 """
 
 import os
 import sys
+import threading
 import wave
 
 import pytest
@@ -29,35 +31,69 @@ def synthesize(text: str, path) -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_wake_word_then_command(tmp_path):
+class WavMicrophone:
+    """Plays audio into the engine as if it came from a microphone, then goes silent."""
+
+    def __init__(self, audio, stop: threading.Event):
+        from vector.voice import BLOCK
+
+        self.blocks = [audio[i:i + BLOCK] for i in range(0, len(audio) - BLOCK + 1, BLOCK)]
+        self.silence = audio[:BLOCK] * 0
+        self._done = stop
+        self.extra = 0
+        self.muted = False
+
+    def read(self, timeout=0.5):
+        if self.blocks:
+            return self.blocks.pop(0)
+        self.extra += 1
+        if self.extra > 100:      # 10 s of silence after the clip: give up
+            self._done.set()
+        return self.silence
+
+    def start(self):
+        pass
+
+    def stop(self):
+        pass
+
+    def drain(self):
+        pass
+
+
+def _speech(tmp_path, text):
     import numpy as np
 
-    from vector.voice import (
-        BLOCK,
-        WAKE_VARIANTS,
-        KeywordSpotter,
-        Segmenter,
-        Transcriber,
-        strip_wake_word,
-    )
-
-    wav = tmp_path / "cmd.wav"
-    synthesize("Vector. Open notepad.", wav)
+    wav = tmp_path / "clip.wav"
+    synthesize(text, wav)
     with wave.open(str(wav)) as w:
         speech = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
-    silence = np.zeros(16000, dtype=np.int16)
-    audio = np.concatenate([silence, speech, silence, silence])
-    blocks = [audio[i:i + BLOCK] for i in range(0, len(audio) - BLOCK + 1, BLOCK)]
+    quiet = np.zeros(16000, dtype=np.int16)
+    return np.concatenate([quiet, speech, quiet, quiet])
 
-    spotter = KeywordSpotter(["vector", *WAKE_VARIANTS])
-    woke_at = next((i for i, b in enumerate(blocks) if spotter.feed(b)), None)
-    assert woke_at is not None, "wake word not detected"
 
-    seg = Segmenter(noise_floor=50, already_speaking=True)
-    for b in blocks[woke_at:]:
-        if seg.feed(b) == "done":
-            break
-    text = Transcriber("base.en").transcribe(seg.audio)
-    command = strip_wake_word(text, "vector")
-    command = (command if command is not None else text).lower()
-    assert "notepad" in command, text
+@pytest.mark.parametrize("spoken, expected", [
+    ("Vector. Open notepad.", "notepad"),          # pause after the wake word
+    ("Vector, what time is it", "time"),           # all in one breath
+])
+def test_engine_hears_wake_word_and_command(tmp_path, spoken, expected):
+    from vector.voice import VoiceEngine
+
+    stop = threading.Event()
+    mic = WavMicrophone(_speech(tmp_path, spoken), stop)
+    engine = VoiceEngine("vector", "base.en", speak=False, mic=mic)
+    engine.start()
+    woke = []
+    command = engine.listen_for_command(stop=stop, on_wake=lambda: woke.append(True))
+    assert woke, "wake word not detected"
+    assert command is not None and expected in command.lower(), repr(command)
+
+
+def test_no_wake_word_means_no_command(tmp_path):
+    from vector.voice import VoiceEngine
+
+    stop = threading.Event()
+    mic = WavMicrophone(_speech(tmp_path, "Open notepad please."), stop)
+    engine = VoiceEngine("vector", "base.en", speak=False, mic=mic)
+    engine.start()
+    assert engine.listen_for_command(stop=stop) is None
