@@ -174,26 +174,32 @@ def check_notification(interactive: bool) -> str:
 
 def check_voice(interactive: bool) -> str:
     try:
-        import speech_recognition as sr
-    except ImportError as exc:
+        import faster_whisper  # noqa: F401
+        import sounddevice as sd
+        import vosk  # noqa: F401
+    except (ImportError, OSError) as exc:
         raise Skip('voice packages not installed (pip install -e ".[voice]")') from exc
-    try:
-        mics = sr.Microphone.list_microphone_names()
-    except Exception as exc:
-        raise RuntimeError(f"PyAudio can't list microphones: {exc}") from exc
-    if not mics:
+    inputs = [d for d in sd.query_devices() if d.get("max_input_channels", 0) > 0]
+    if not inputs:
         raise RuntimeError("no microphone found")
-    detail = f"{len(mics)} audio device(s)"
-    if _ask("Say a test sentence out loud and try the mic?", interactive):
-        from vector.voice import Voice
+    detail = f"{len(inputs)} microphone(s)"
+    if _ask('Test hands-free voice? (say "Vector, what time is it" when asked)', interactive):
+        from vector.config import load_config
+        from vector.voice import VoiceEngine
 
-        voice = Voice(speak_replies=True)
-        voice.say("Vector voice test. Please say something after the beep.")
-        print("    Listening for 6 seconds...")
-        heard = voice.listen(timeout=6, phrase_limit=6)
-        if not heard:
-            raise RuntimeError("didn't understand anything - check mic permissions (docs/windows.md)")
-        detail += f"; heard: \"{heard}\""
+        config = load_config()
+        print("    Loading speech models (first time downloads ~200 MB)...")
+        with VoiceEngine(config.wake_word, config.whisper_model) as engine:
+            engine.say("Say: Vector, what time is it.")
+            print("    Listening for 15 seconds...")
+            stop = __import__("threading").Event()
+            timer = __import__("threading").Timer(15, stop.set)
+            timer.start()
+            heard = engine.listen_for_command(stop=stop)
+            timer.cancel()
+        if heard is None:
+            raise RuntimeError("didn't hear \"Vector\" - check mic permissions (docs/windows.md)")
+        detail += f'; wake word OK, heard: "{heard}"'
     return detail
 
 

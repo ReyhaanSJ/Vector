@@ -87,9 +87,24 @@ Small local models are less reliable at multi-step tasks than Claude, but nothin
 
 ## Usage
 
+### The VECTOR app (Windows)
+
+After setup, VECTOR runs quietly in the background. Look for its icon by the clock.
+
+- **Press `Ctrl+Shift+Space` anywhere** to pop up the summon bar and type a request.
+- **Or just say "Vector, ..."**, no button needed. Example: *"Vector, open Spotify and set the volume to 30."*
+  Listening for the wake word happens offline on your computer, and so does turning your
+  speech into text.
+- Risky actions show an **Allow / Deny** card, and you can also just say "yes" or "no".
+- Right-click the tray icon to turn listening off or quit. Change the shortcut with
+  `vector --set hotkey=ctrl+alt+v`.
+
+### Terminal
+
 ```bash
 vector                          # chat by typing
-vector --voice                  # hands-free: "Vector, open Spotify"
+vector --app                    # the background app (summon bar + voice)
+vector --voice                  # hands-free in the terminal: "Vector, open Spotify"
 vector open my downloads folder # one-shot command
 vector --list-skills            # see everything it can do
 vector --selftest               # check everything works on your computer
@@ -108,13 +123,13 @@ you > what's taking up memory, and close spotify
 VECTOR > Chrome is the biggest at 1.8 GB. Spotify is closed.
 ```
 
-### Voice mode setup notes
+### Voice notes
 
-`pip install -e ".[voice]"` installs SpeechRecognition, pyttsx3 and PyAudio.
-
-- **Linux:** `sudo apt install portaudio19-dev espeak-ng` before installing.
-- **macOS:** `brew install portaudio` before installing.
-- Speech-to-text uses Google's free recognizer (needs internet). See `vector/voice.py` to swap in Whisper for offline use.
+`pip install -e ".[voice]"` installs the offline wake-word spotter (Vosk), offline
+speech-to-text (faster-whisper) and microphone access (sounddevice). The speech models
+(~200 MB) download once; `vector --prepare-voice` fetches them ahead of time.
+Pick a speech model with `vector --set whisper_model=small.en`. It's more accurate but slower.
+`tiny.en` is the fastest.
 
 ## Configuration
 
@@ -178,8 +193,9 @@ VECTOR can control your computer, so:
 
 ## Roadmap
 
-- [ ] Offline wake word + Whisper speech recognition
-- [ ] System-tray / desktop GUI with a HUD
+- [x] Offline wake word + Whisper speech recognition
+- [x] Tray app with a summon bar
+- [ ] Full desktop window with system HUD
 - [ ] Calendar & email skills
 - [ ] Screen understanding (screenshot -> "what's on my screen?")
 - [ ] Scheduled routines ("every morning at 9, open my work apps")

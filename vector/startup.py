@@ -16,27 +16,58 @@ def startup_folder() -> Path:
     return Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
 
 
-def enable(voice: bool = True, folder: Path | None = None) -> Path:
-    """Write a small launcher into the Startup folder. Returns its path."""
+SHORTCUT_NAME = "VECTOR.lnk"
+
+
+def app_launcher() -> tuple[str, str]:
+    """(program, arguments) that start the background app without a console window."""
+    scripts = Path(sys.executable).parent
+    exe = scripts / ("vector-app.exe" if IS_WINDOWS else "vector-app")
+    if exe.exists():
+        return str(exe), "--background"
+    pythonw = scripts / "pythonw.exe"
+    return str(pythonw if pythonw.exists() else sys.executable), "-m vector.app --background"
+
+
+def enable(app: bool = True, folder: Path | None = None) -> Path:
+    """Start VECTOR at login. app=True: the background app (tray, shortcut, voice);
+    app=False: the terminal version. Returns the file created."""
     folder = folder or startup_folder()
     folder.mkdir(parents=True, exist_ok=True)
+    disable(folder)
+    if app and IS_WINDOWS:
+        from vector.osutil import powershell, ps_quote
+
+        target, arguments = app_launcher()
+        path = folder / SHORTCUT_NAME
+        result = powershell(
+            "$s = (New-Object -ComObject WScript.Shell).CreateShortcut(" + ps_quote(str(path)) + ");"
+            f"$s.TargetPath = {ps_quote(target)}; $s.Arguments = {ps_quote(arguments)};"
+            "$s.Description = 'VECTOR'; $s.Save()"
+        )
+        if result.returncode == 0 and path.exists():
+            return path
     path = folder / SCRIPT_NAME
-    mode = " --voice" if voice else ""
+    if app:
+        target, arguments = app_launcher()
+        line = f'start "" "{target}" {arguments}'
+    else:
+        line = f'start "VECTOR" "{sys.executable}" -m vector'
     path.write_text(
-        "@echo off\r\n"
-        "rem Started by VECTOR. Remove with: vector --startup off\r\n"
-        f'start "VECTOR" "{sys.executable}" -m vector{mode}\r\n',
+        "@echo off\r\nrem Started by VECTOR. Remove with: vector --startup off\r\n" + line + "\r\n",
         encoding="utf-8",
     )
     return path
 
 
 def disable(folder: Path | None = None) -> bool:
-    path = (folder or startup_folder()) / SCRIPT_NAME
-    if path.exists():
-        path.unlink()
-        return True
-    return False
+    folder = folder or startup_folder()
+    removed = False
+    for name in (SCRIPT_NAME, SHORTCUT_NAME):
+        if (folder / name).exists():
+            (folder / name).unlink()
+            removed = True
+    return removed
 
 
 def supported() -> bool:

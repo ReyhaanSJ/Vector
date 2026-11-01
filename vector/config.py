@@ -40,9 +40,16 @@ ollama_url = "http://localhost:11434"
 # files, writing files, typing keys). Strongly recommended to keep this on.
 confirm_dangerous = true
 
-# Voice mode
+# Voice: say the wake word, then your request. No button needed.
 wake_word = "vector"
 speak_replies = true
+# Start listening for the wake word as soon as the VECTOR app opens.
+listen_on_start = true
+# Offline speech-to-text model: tiny.en (fastest), base.en, small.en (most accurate).
+whisper_model = "base.en"
+
+# Keyboard shortcut that pops up the summon bar from anywhere.
+hotkey = "ctrl+shift+space"
 
 # Extra folders to load your own skills from (*.py files using @tool).
 skill_dirs = []
@@ -59,6 +66,9 @@ class Config:
     confirm_dangerous: bool = True
     wake_word: str = "vector"
     speak_replies: bool = True
+    listen_on_start: bool = True
+    whisper_model: str = "base.en"
+    hotkey: str = "ctrl+shift+space"
     skill_dirs: list[str] = field(default_factory=list)
 
     @property

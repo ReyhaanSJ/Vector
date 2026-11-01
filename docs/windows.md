@@ -19,12 +19,25 @@ Setup then:
 Run `Install VECTOR.bat` again any time to update. Remove everything with
 **Start Menu > VECTOR > Uninstall VECTOR**.
 
+### Using VECTOR
+
+VECTOR starts with Windows and waits in the background (icon by the clock).
+
+- **`Ctrl+Shift+Space`** anywhere opens the summon bar. Type, then press Enter. Esc closes it.
+- **Say "Vector, ..."** to talk to it. No button needed. "Vector" alone works too: it answers
+  "Yes?" and listens.
+- When VECTOR asks permission, click **Allow** or **Deny**, press **Y** or **N**, or say yes or no.
+- Tray icon (right-click): turn listening on or off, open the bar, quit.
+
 ### Changing settings later
 
 ```powershell
 vector --set model=qwen2.5:14b      # a smarter free model (needs more memory)
 vector --set provider=anthropic     # switch to Claude (needs ANTHROPIC_API_KEY)
 vector --set user_name=Ray          # what VECTOR calls you
+vector --set hotkey=ctrl+alt+v      # a different summon shortcut
+vector --set listen_on_start=false  # don't listen for "Vector" until you turn it on
+vector --set whisper_model=small.en # more accurate speech recognition (slower)
 ```
 
 | Graphics card memory | Suggested free model |
@@ -67,6 +80,9 @@ vector --startup off    # stop
 | "Windows protected your PC" | Click **More info → Run anyway**. |
 | "Can't reach the free local AI" | Start the **Ollama** app from the Start Menu, then try again. |
 | "Ollama doesn't have 'model'" | Run `ollama pull <model>` with the name it shows. |
+| Shortcut does nothing | Another app uses it. Pick another: `vector --set hotkey=ctrl+alt+v`, then restart VECTOR from the tray. |
+| It reacts when nobody said "Vector" | Lower background noise, or turn listening off from the tray icon. |
+| Something went wrong in the app | The log is at `C:\Users\<you>\.vector\app.log`. |
 | VECTOR can't hear you | Settings > Privacy & security > Microphone: turn on **Let desktop apps access your microphone**. Check the right mic is the default under Settings > System > Sound. |
 | It hears "Victor" | That's fine, "Victor" and "Vektor" also work as wake words. |
 | No notifications | Settings > System > Notifications: make sure notifications (and Windows PowerShell) are on, and Do Not Disturb is off. |

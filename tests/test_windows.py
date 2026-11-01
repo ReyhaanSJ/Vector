@@ -36,9 +36,13 @@ def test_settings_uri():
 
 
 def test_startup_enable_disable(tmp_path):
-    path = startup.enable(voice=True, folder=tmp_path)
-    text = path.read_text()
-    assert "-m vector --voice" in text and sys.executable in text
+    path = startup.enable(app=True, folder=tmp_path)
+    assert path.exists()
+    if path.suffix == ".bat":
+        assert "--background" in path.read_text()
+    terminal = startup.enable(app=False, folder=tmp_path)
+    assert terminal.suffix == ".bat" and "-m vector" in terminal.read_text()
+    assert not path.exists() or path == terminal  # switching modes replaces the old launcher
     assert startup.disable(folder=tmp_path) is True
     assert startup.disable(folder=tmp_path) is False
 

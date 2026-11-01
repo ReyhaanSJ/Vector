@@ -6,7 +6,8 @@
     vector --setup              create ~/.vector/config.toml
     vector --list-skills        show everything VECTOR can do
     vector --selftest           check that everything works on this computer
-    vector --startup on         start VECTOR (voice mode) when you log in (Windows)
+    vector --app                background app: summon bar + say "Vector, ..." anywhere
+    vector --startup on         start the VECTOR app when you log in (Windows)
 """
 
 from __future__ import annotations
@@ -71,7 +72,11 @@ def show_action(name: str, args: dict) -> None:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="vector", description="VECTOR - an AI assistant for your laptop.")
     p.add_argument("request", nargs="*", help="a one-off request, e.g. vector open spotify")
-    p.add_argument("--voice", action="store_true", help="hands-free voice mode")
+    p.add_argument("--app", action="store_true",
+                   help="start the background app: summon bar (Ctrl+Shift+Space) and hands-free voice")
+    p.add_argument("--voice", action="store_true", help="hands-free voice mode in this terminal")
+    p.add_argument("--prepare-voice", action="store_true",
+                   help="download the offline speech models now (~200 MB, once)")
     p.add_argument("--provider", help="ollama, anthropic or auto (overrides config)")
     p.add_argument("--set", metavar="KEY=VALUE", action="append",
                    help="save a setting, e.g. --set model=qwen2.5:7b or --set user_name=Ray")
@@ -80,8 +85,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--setup", action="store_true", help="write a default config file")
     p.add_argument("--list-skills", action="store_true", help="list available skills")
     p.add_argument("--selftest", action="store_true", help="check that everything works on this computer")
-    p.add_argument("--startup", choices=["on", "off", "text"],
-                   help="Windows: launch VECTOR at login (on = voice, text = typing, off = remove)")
+    p.add_argument("--startup", choices=["on", "off", "terminal"],
+                   help="Windows: start VECTOR at login (on = background app, terminal, off = remove)")
     p.add_argument("--version", action="version", version=f"VECTOR {__version__}")
     return p
 
@@ -118,6 +123,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.startup:
         return set_startup(args.startup)
+
+    if args.app:
+        from vector.app import main as app_main
+
+        return app_main([])
+
+    if args.prepare_voice:
+        return prepare_voice()
 
     config = load_config()
     if args.provider:
@@ -169,7 +182,7 @@ def set_startup(mode: str) -> int:
         removed = startup.disable()
         print("VECTOR will no longer start at login." if removed else "VECTOR wasn't set to start at login.")
     else:
-        path = startup.enable(voice=(mode == "on"))
+        path = startup.enable(app=(mode == "on"))
         print(f"VECTOR will start when you log in ({path}).\nUndo with: vector --startup off")
     return 0
 
@@ -212,58 +225,74 @@ def text_loop(vector) -> int:
         print(f"{CYAN}VECTOR >{RESET} {reply}\n")
 
 
+def prepare_voice() -> int:
+    from vector.config import load_config
+    from vector.voice import VoiceEngine, VoiceUnavailable
+
+    config = load_config()
+    print("Downloading the offline speech models (only needed once)...")
+    try:
+        VoiceEngine.prepare(config.whisper_model)
+    except VoiceUnavailable as exc:
+        print(f"{RED}{exc}{RESET}")
+        return 1
+    print("Voice is ready.")
+    return 0
+
+
 def voice_loop(vector) -> int:
     from vector.brain import BrainError
-    from vector.voice import Voice, VoiceUnavailable, strip_wake_word
+    from vector.voice import VoiceEngine, VoiceUnavailable
 
+    wake = vector.config.wake_word
+    print(BANNER)
+    print(f"{DIM}  starting voice (the first time downloads ~200 MB of speech models)...{RESET}")
     try:
-        voice = Voice(speak_replies=vector.config.speak_replies)
+        engine = VoiceEngine(wake, vector.config.whisper_model, speak=vector.config.speak_replies)
+        engine.start()
     except VoiceUnavailable as exc:
         print(f"{RED}{exc}{RESET}")
         return 1
 
-    wake = vector.config.wake_word
-    vector.confirm = lambda name, args: _voice_confirm(voice, name, args)
-    print(BANNER)
-    print(f"{DIM}  listening... say \"{wake.title()}, <your request>\". Ctrl+C to quit.{RESET}")
-    voice.say("Vector online.")
-    while True:
-        try:
-            heard = voice.listen()
-            if not heard:
-                continue
-            command = strip_wake_word(heard, wake)
+    vector.confirm = lambda name, args: _voice_confirm(engine, name, args)
+    print(f"{DIM}  listening... just say \"{wake.title()}, <your request>\". Ctrl+C to quit.{RESET}")
+    engine.say("Vector online.")
+    try:
+        while True:
+            command = engine.listen_for_command(on_wake=lambda: print(f"{DIM}  (listening){RESET}"))
             if command is None:
                 continue
-            print(f"{CYAN}you > {RESET}{heard}")
             if not command:
-                voice.say("Yes?")
-                command = voice.listen(timeout=6) or ""
+                engine.say("Yes?")
+                command = engine.listen_once()
                 if not command:
                     continue
-                print(f"{CYAN}you > {RESET}{command}")
-            if command.lower().strip(" .") in {"goodbye", "shut down vector", "exit", "quit"}:
-                voice.say("Goodbye.")
+            print(f"{CYAN}you > {RESET}{command}")
+            if command.lower().strip(" .!") in {"goodbye", "shut down", "exit", "quit", "stop listening"}:
+                engine.say("Goodbye.")
                 return 0
             try:
                 reply = vector.ask(command)
             except BrainError as exc:
                 reply = str(exc)
             print(f"{CYAN}VECTOR >{RESET} {reply}\n")
-            voice.say(reply)
-        except VoiceUnavailable as exc:
-            print(f"{RED}{exc}{RESET}")
-            return 1
-        except KeyboardInterrupt:
-            print()
-            return 0
+            engine.say(reply)
+    except VoiceUnavailable as exc:
+        print(f"{RED}{exc}{RESET}")
+        return 1
+    except KeyboardInterrupt:
+        print()
+        return 0
+    finally:
+        engine.stop()
 
 
-def _voice_confirm(voice, name: str, args: dict) -> bool:
+def _voice_confirm(engine, name: str, args: dict) -> bool:
     print(f"{YELLOW}  ! VECTOR wants to run {name}({_fmt_args(args)}) - say yes or no{RESET}")
-    voice.say(f"I need your permission to run {name.replace('_', ' ')}. Yes or no?")
-    answer = (voice.listen(timeout=8) or "").lower()
-    return any(w in answer.split() for w in ("yes", "yeah", "yep", "sure", "confirm", "do"))
+    engine.say(f"Can I run {name.replace('_', ' ')}? Say yes or no.")
+    answer = engine.ask_yes_no(timeout=10)
+    print(f"{DIM}    {'allowed' if answer else 'denied'}{RESET}")
+    return bool(answer)
 
 
 if __name__ == "__main__":

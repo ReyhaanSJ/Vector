@@ -21,14 +21,15 @@ $paths = @(
     (Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\vector.cmd"),
     (Join-Path ([Environment]::GetFolderPath("Desktop")) "VECTOR.lnk"),
     (Join-Path ([Environment]::GetFolderPath("Programs")) "VECTOR"),
-    (Join-Path ([Environment]::GetFolderPath("Startup")) "VECTOR.bat")
+    (Join-Path ([Environment]::GetFolderPath("Startup")) "VECTOR.bat"),
+    (Join-Path ([Environment]::GetFolderPath("Startup")) "VECTOR.lnk")
 )
 foreach ($p in $paths) {
     if (Test-Path $p) { Remove-Item -Recurse -Force $p; Write-Host "Removed $p" }
 }
 
 # VECTOR may be running; stop it so its files can be deleted.
-Get-Process -Name vector -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process -Name "vector-app", "vector" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 if (Test-Path $AppDir) {
     Remove-Item -Recurse -Force $AppDir
     Write-Host "Removed $AppDir"

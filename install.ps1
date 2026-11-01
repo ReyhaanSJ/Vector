@@ -24,6 +24,7 @@ $AppSrc  = Join-Path $AppDir "src"
 $Venv    = Join-Path $AppDir ".venv"
 $Py      = Join-Path $Venv "Scripts\python.exe"
 $Exe     = Join-Path $Venv "Scripts\vector.exe"
+$AppExe  = Join-Path $Venv "Scripts\vector-app.exe"
 $Auto    = $env:VECTOR_INSTALL_YES -eq "1"
 $AiChoice = if ($env:VECTOR_INSTALL_AI) { $env:VECTOR_INSTALL_AI.ToLower() } else { "ask" }
 
@@ -65,6 +66,8 @@ if ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot "pyproject.toml"))) {
     $Source = $found.DirectoryName
 }
 New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
+# Updating? Close the running app first so its files can be replaced.
+Get-Process -Name "vector-app", "vector" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 if ((Resolve-Path $Source).Path.TrimEnd("\") -ne $AppSrc) {
     robocopy $Source $AppSrc /MIR /XD .venv .git __pycache__ .pytest_cache /NFL /NDL /NJH /NJS /NP | Out-Null
     if ($LASTEXITCODE -ge 8) { Fail "couldn't copy VECTOR's files to $AppSrc (robocopy code $LASTEXITCODE)." }
@@ -91,15 +94,20 @@ if ($LASTEXITCODE -ne 0 -or -not (Test-Path $Py)) { Fail "couldn't create VECTOR
 Step 3 "Installing VECTOR (about a minute)"
 Push-Location $AppSrc
 try {
-    & $Uv pip install --python $Py ".[control]" --quiet
+    & $Uv pip install --python $Py ".[control,app]" --quiet
     if ($LASTEXITCODE -ne 0) { Fail "installing VECTOR's packages failed." }
     $voiceOk = $true
     & $Uv pip install --python $Py ".[voice]" --quiet
     if ($LASTEXITCODE -ne 0) {
         $voiceOk = $false
-        Say "Voice support couldn't be installed. Typing mode works fine." Yellow
+        Say "Voice support couldn't be installed. Typing and the summon bar work fine." Yellow
     }
 } finally { Pop-Location }
+if ($voiceOk -and $env:VECTOR_INSTALL_SKIP_MODEL -ne "1") {
+    Say "Downloading the offline speech models (~200 MB, only once)..."
+    & $Py -m vector --prepare-voice
+    if ($LASTEXITCODE -ne 0) { Say "Couldn't download them now; VECTOR will try again when you first use voice." Yellow }
+}
 & $Py -m vector --setup | Out-Null
 
 # ---------------------------------------------------------------- 4. AI brain
@@ -196,25 +204,26 @@ if ($env:VECTOR_INSTALL_NO_SHORTCUTS -ne "1") {
         $lnk.Save()
     }
     $desktop = [Environment]::GetFolderPath("Desktop")
-    Add-Shortcut (Join-Path $desktop "VECTOR.lnk") $Exe "" "Talk to VECTOR by typing"
-    Add-Shortcut (Join-Path $menu "VECTOR.lnk") $Exe "" "Talk to VECTOR by typing"
-    if ($voiceOk) { Add-Shortcut (Join-Path $menu "VECTOR (voice).lnk") $Exe "--voice" "Talk to VECTOR out loud" }
+    Add-Shortcut (Join-Path $desktop "VECTOR.lnk") $AppExe "" "Open VECTOR"
+    Add-Shortcut (Join-Path $menu "VECTOR.lnk") $AppExe "" "Open VECTOR"
+    Add-Shortcut (Join-Path $menu "VECTOR (terminal).lnk") $Exe "" "VECTOR in a terminal window"
     $uninstaller = Join-Path $AppSrc "scripts\uninstall-windows.ps1"
     Add-Shortcut (Join-Path $menu "Uninstall VECTOR.lnk") "powershell.exe" "-NoProfile -ExecutionPolicy Bypass -File `"$uninstaller`"" "Remove VECTOR from this computer"
 }
 
-if (AskYes "Start VECTOR automatically when you log in?" $false) {
-    $mode = if ($voiceOk) { "on" } else { "text" }
-    & $Py -m vector --startup $mode | Out-Null
+if (AskYes "Start VECTOR quietly in the background when you log in? (recommended)" $true) {
+    & $Py -m vector --startup on | Out-Null
 }
 
 & $Exe --version | Out-Null
-if ($LASTEXITCODE -ne 0) { Fail "VECTOR was installed but doesn't start." }
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $AppExe)) { Fail "VECTOR was installed but doesn't start." }
 
 Write-Host ""
 Write-Host "  All done!" -ForegroundColor Green
-Write-Host "  Open VECTOR from the Desktop or Start Menu, or type  vector  in a new terminal." -ForegroundColor Green
+Write-Host "  VECTOR runs in the background (look for its icon by the clock):" -ForegroundColor Green
+Write-Host "    - press Ctrl+Shift+Space anywhere to type to it" -ForegroundColor Green
+if ($voiceOk) { Write-Host "    - or just say `"Vector, what time is it?`"" -ForegroundColor Green }
 Write-Host "  Check everything works:  vector --selftest" -ForegroundColor DarkGray
 Write-Host "  Remove it later: Start Menu > VECTOR > Uninstall VECTOR" -ForegroundColor DarkGray
 Write-Host ""
-if (-not $Auto -and (AskYes "Open VECTOR now?" $true)) { Start-Process -FilePath $Exe }
+if (-not $Auto -and (AskYes "Open VECTOR now?" $true)) { Start-Process -FilePath $AppExe }

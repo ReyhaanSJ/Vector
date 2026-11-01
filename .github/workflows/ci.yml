@@ -52,6 +52,10 @@ jobs:
           & $exe --list-skills | Select-Object -First 4
           cmd /c "$env:LOCALAPPDATA\Microsoft\WindowsApps\vector.cmd" --version; if ($LASTEXITCODE) { exit 1 }
           if (-not (Test-Path "$([Environment]::GetFolderPath('Desktop'))\VECTOR.lnk")) { throw "no desktop shortcut" }
+          if (-not (Test-Path "$env:LOCALAPPDATA\Programs\VECTOR\.venv\Scripts\vector-app.exe")) { throw "no vector-app" }
+          if (-not (Test-Path "$([Environment]::GetFolderPath('Startup'))\VECTOR.lnk")) { throw "no login shortcut" }
+          & "$env:LOCALAPPDATA\Programs\VECTOR\.venv\Scripts\python.exe" -c "import pystray, PIL, sounddevice, vosk, faster_whisper; print('app + voice packages OK')"
+          if ($LASTEXITCODE) { exit 1 }
           Get-Content "$env:USERPROFILE\.vector\config.toml" | Select-String "^(provider|model) ="
           if ("${{ matrix.ai }}" -eq "ollama") {
             if (-not (Select-String -Path "$env:USERPROFILE\.vector\config.toml" -Pattern '^provider = "ollama"')) { throw "ollama not configured" }
@@ -62,3 +66,17 @@ jobs:
           powershell -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\Programs\VECTOR\src\scripts\uninstall-windows.ps1"
           if (Test-Path "$env:LOCALAPPDATA\Programs\VECTOR") { throw "app folder still there" }
           if (Test-Path "$env:LOCALAPPDATA\Microsoft\WindowsApps\vector.cmd") { throw "vector command still there" }
+          if (Test-Path "$([Environment]::GetFolderPath('Startup'))\VECTOR.lnk") { throw "login shortcut still there" }
+
+  # Windows' own voice speaks "Vector. Open notepad." and VECTOR must understand it.
+  speech-e2e:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e ".[voice,dev]"
+      - run: pytest -v tests/test_speech_e2e.py
+        env:
+          VECTOR_SPEECH_E2E: "1"
