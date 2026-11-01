@@ -89,9 +89,13 @@ if ((Resolve-Path $Source).Path.TrimEnd("\") -ne $AppSrc) {
 Say "Installing to $AppDir"
 
 # ---------------------------------------------------------------- 2. python
-Step 2 "Setting up Python (a private copy just for VECTOR)"
+Step 2 "Setting up Python for VECTOR"
 $Uv = (Get-Command uv -ErrorAction SilentlyContinue | Select-Object -First 1).Source
-if (-not $Uv) {
+foreach ($candidate in @((Join-Path $env:USERPROFILE ".local\bin\uv.exe"), (Join-Path $env:USERPROFILE ".cargo\bin\uv.exe"))) {
+    if (-not $Uv -and (Test-Path $candidate)) { $Uv = $candidate }
+}
+if ($Uv) { Say "Already installed: uv" }
+else {
     Say "Installing uv, the tool that manages VECTOR's Python..."
     try { powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://astral.sh/uv/install.ps1 | iex" | Out-Null } catch {}
     foreach ($candidate in @(
@@ -101,11 +105,23 @@ if (-not $Uv) {
     }
 }
 if (-not $Uv) { Fail "couldn't install uv (https://docs.astral.sh/uv/)." }
-& $Uv venv $Venv --python 3.13 --allow-existing --quiet
+# Any Python 3.11-3.13 already on this computer is reused; otherwise uv fetches 3.13.
+# (Newer versions like 3.15 are skipped: some voice parts don't support them yet.)
+$PyWanted = ">=3.11,<3.14"
+$existing = $null
+try { $existing = (& $Uv python find $PyWanted 2>$null | Select-Object -First 1) } catch {}
+if ($existing -and (Test-Path $existing)) {
+    $pyVersion = "Python"
+    try { $pyVersion = (& $existing --version) -join "" } catch {}
+    Say "Already installed: $pyVersion (reusing it)"
+} else {
+    Say "Downloading Python 3.13 just for VECTOR (~30 MB, your own Python is left alone)..."
+}
+& $Uv venv $Venv --python $PyWanted --allow-existing --quiet
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $Py)) { Fail "couldn't create VECTOR's Python environment." }
 
 # ---------------------------------------------------------------- 3. packages
-Step 3 "Installing VECTOR (about a minute)"
+Step 3 "Installing VECTOR (parts already installed are skipped)"
 Push-Location $AppSrc
 try {
     & $Uv pip install --python $Py ".[control,app]" --quiet
@@ -118,7 +134,6 @@ try {
     }
 } finally { Pop-Location }
 if ($voiceOk -and $env:VECTOR_INSTALL_SKIP_MODEL -ne "1") {
-    Say "Downloading the offline speech models (~200 MB, only once)..."
     & $Py -m vector --prepare-voice
     if ($LASTEXITCODE -ne 0) { Say "Couldn't download them now; VECTOR will try again when you first use voice." Yellow }
 }
@@ -163,6 +178,7 @@ if ($AiChoice -eq "ollama") {
     $Ollama = (Get-Command ollama -ErrorAction SilentlyContinue | Select-Object -First 1).Source
     $ollamaDefault = Join-Path $env:LOCALAPPDATA "Programs\Ollama\ollama.exe"
     if (-not $Ollama -and (Test-Path $ollamaDefault)) { $Ollama = $ollamaDefault }
+    if ($Ollama) { Say "Already installed: Ollama" }
     if (-not $Ollama) {
         Say "Installing Ollama (the free AI engine)..."
         if (Get-Command winget -ErrorAction SilentlyContinue) {
@@ -195,9 +211,16 @@ if ($AiChoice -eq "ollama") {
                 Start-Process -FilePath $Ollama -ArgumentList "serve" -WindowStyle Hidden
                 Start-Sleep -Seconds 4
             }
-            Say "Downloading the AI model (a few GB, only needed once)..."
-            & $Ollama pull $Model
-            if ($LASTEXITCODE -ne 0) { Say "Download failed. Later, run:  ollama pull $Model" Yellow }
+            $models = ""
+            try { $models = (& $Ollama list) -join "`n" } catch {}
+            $pattern = "(?m)^" + [regex]::Escape($Model) + "(:latest)?\s"
+            if ($models -match $pattern) {
+                Say "Already downloaded: $Model"
+            } else {
+                Say "Downloading the AI model $Model (a few GB, only needed once)..."
+                & $Ollama pull $Model
+                if ($LASTEXITCODE -ne 0) { Say "Download failed. Later, run:  ollama pull $Model" Yellow }
+            }
         }
     }
 } elseif ($AiChoice -eq "openrouter") {

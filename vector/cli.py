@@ -250,7 +250,8 @@ def show_versions() -> int:
         here = same_version(r.tag, __version__)
         mark = f"{CYAN}* installed{RESET}" if here else ""
         tag = " (preview)" if r.prerelease else ""
-        headline = next((ln.strip("#* ").strip() for ln in r.notes.splitlines() if ln.strip()), "")
+        headline = next((ln.replace("*", "").strip("# ").strip()
+                         for ln in r.notes.splitlines() if ln.strip()), "")
         print(f"  {r.version:<10} {r.published}  {mark}{tag}")
         if headline:
             print(f"    {DIM}{headline[:90]}{RESET}")
@@ -281,10 +282,13 @@ def run_update(target: str) -> int:
 
 def prepare_voice() -> int:
     from vector.config import load_config
-    from vector.voice import VoiceEngine, VoiceUnavailable
+    from vector.voice import VoiceEngine, VoiceUnavailable, speech_models_present
 
     config = load_config()
-    print("Downloading the offline speech models (only needed once)...")
+    if speech_models_present(config.whisper_model):
+        print("Already downloaded: speech models")
+    else:
+        print("Downloading the offline speech models (~200 MB, only needed once)...")
     try:
         VoiceEngine.prepare(config.whisper_model)
     except VoiceUnavailable as exc:

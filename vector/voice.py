@@ -216,6 +216,19 @@ class KeywordSpotter:
         self._rec.Reset()
 
 
+def speech_models_present(whisper_model: str = "base.en") -> bool:
+    """True if both speech models are already downloaded (so nothing needs fetching)."""
+    import os
+    from pathlib import Path
+
+    vosk_dir = Path.home() / ".cache" / "vosk"
+    has_vosk = any(vosk_dir.glob("vosk-model-small-en-us-*")) if vosk_dir.exists() else False
+    hf_home = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface"))
+    hub = Path(os.environ.get("HF_HUB_CACHE", hf_home / "hub"))
+    has_whisper = any(hub.glob(f"models--*--faster-whisper-{whisper_model}/snapshots/*/model.bin"))
+    return has_vosk and has_whisper
+
+
 class Transcriber:
     """Offline speech-to-text with Whisper. The model downloads once (~150 MB for base.en)."""
 

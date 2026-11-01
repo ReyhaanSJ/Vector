@@ -88,3 +88,19 @@ def test_describe_step():
     assert describe_step("open_app", {"name": "spotify"}) == "Open app: spotify"
     assert describe_step("show_desktop", {}) == "Show desktop"
     assert describe_step("write_text_file", {"path": "x" * 80, "content": "hi"}).endswith("...")
+
+
+def test_speech_models_present(tmp_path, monkeypatch):
+    from vector.voice import speech_models_present
+
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    monkeypatch.delenv("HF_HOME", raising=False)
+    monkeypatch.delenv("HF_HUB_CACHE", raising=False)
+    assert not speech_models_present("base.en")
+    (tmp_path / ".cache/vosk/vosk-model-small-en-us-0.15").mkdir(parents=True)
+    assert not speech_models_present("base.en")
+    snap = tmp_path / ".cache/huggingface/hub/models--Systran--faster-whisper-base.en/snapshots/abc"
+    snap.mkdir(parents=True)
+    (snap / "model.bin").write_bytes(b"x")
+    assert speech_models_present("base.en")
+    assert not speech_models_present("small.en")
