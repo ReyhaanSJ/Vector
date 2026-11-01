@@ -156,8 +156,8 @@ vector --update 0.2.0      # install a specific version (also to go back)
 ```
 
 Versions are published on the [Releases page](https://github.com/ReyhaanSJ/Vector/releases).
-Maintainers: bump the version in `pyproject.toml` and `vector/__init__.py`, then push a tag such
-as `v0.3.0` and the release builds itself.
+Maintainers: bump the version in `pyproject.toml` and `vector/__init__.py`, then on GitHub go to
+**Actions → Release → Run workflow** (or push a tag like `v0.3.0`). The release builds itself.
 
 ## Configuration
 

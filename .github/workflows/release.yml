@@ -1,10 +1,19 @@
 name: Release
 
-# Push a tag like v0.3.0 (matching the version in pyproject.toml) to publish a release.
-# Each release gets VECTOR-Setup-<version>.zip, and installed copies offer it as an update.
+# Publish a release either way:
+#  - GitHub > Actions > Release > "Run workflow" (it creates the tag for you), or
+#  - push a tag like v0.3.0.
+# The version must match pyproject.toml. Each release gets VECTOR-Setup-<version>.zip,
+# and installed copies of VECTOR offer it as an update.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: "Mark as a preview (installed copies won't auto-update to it)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -16,21 +25,31 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Check the tag matches the version
+      - name: Work out the version
+        id: v
         run: |
-          tag="${GITHUB_REF_NAME#v}"
           code=$(python3 -c "import re;print(re.search(r'__version__ = \"(.+?)\"', open('vector/__init__.py').read()).group(1))")
           meta=$(python3 -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
-          echo "tag=$tag code=$code pyproject=$meta"
-          test "$tag" = "$code" && test "$tag" = "$meta"
+          test "$code" = "$meta" || { echo "vector/__init__.py says $code but pyproject.toml says $meta"; exit 1; }
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            test "${GITHUB_REF_NAME#v}" = "$code" || { echo "tag $GITHUB_REF_NAME doesn't match version $code"; exit 1; }
+          elif git rev-parse "v$code" >/dev/null 2>&1; then
+            echo "v$code is already released. Bump the version first."; exit 1
+          fi
+          echo "version=$code" >> "$GITHUB_OUTPUT"
       - name: Build the setup ZIP
         run: |
           mkdir dist
-          git archive --format zip --prefix "VECTOR-$GITHUB_REF_NAME/" -o "dist/VECTOR-Setup-${GITHUB_REF_NAME#v}.zip" HEAD
+          git archive --format zip --prefix "VECTOR-v${{ steps.v.outputs.version }}/" \
+            -o "dist/VECTOR-Setup-${{ steps.v.outputs.version }}.zip" HEAD
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+          PRE: ${{ inputs.prerelease }}
         run: |
           prerelease=""
-          case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease";; esac
-          gh release create "$GITHUB_REF_NAME" dist/*.zip --title "VECTOR ${GITHUB_REF_NAME#v}" --generate-notes $prerelease
+          case "$VERSION" in *-*) prerelease="--prerelease";; esac
+          [ "$PRE" = "true" ] && prerelease="--prerelease"
+          gh release create "v$VERSION" dist/*.zip --target "$GITHUB_SHA" \
+            --title "VECTOR $VERSION" --generate-notes $prerelease
