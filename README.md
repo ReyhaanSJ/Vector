@@ -35,12 +35,19 @@ Windows · macOS · Linux · Claude or fully local (Ollama) · MIT licensed
 
 ## Quick start
 
-### Windows 10/11 (one command)
+### Windows 10/11: two clicks, nothing to install first
+
+1. Download VECTOR: green **Code** button → **Download ZIP**, then right-click it → **Extract All**.
+2. Double-click **`Install VECTOR.bat`**.
+
+That's it. Setup gets its own copy of Python, installs VECTOR, sets up the **free** local AI
+(or Claude if you have an API key), and adds Desktop and Start Menu shortcuts.
+No Python, Git or API key needed beforehand.
+
+Or paste one line into PowerShell:
 
 ```powershell
-git clone https://github.com/reyhaansj/vector.git
-cd vector
-powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1
+irm https://raw.githubusercontent.com/ReyhaanSJ/Vector/HEAD/install.ps1 | iex
 ```
 
 The full Windows guide, Windows-only skills and troubleshooting are in **[docs/windows.md](docs/windows.md)**.
@@ -56,7 +63,7 @@ pip install -e ".[all]"      # or just `pip install -e .` for text-only mode
 vector --setup               # creates ~/.vector/config.toml (optional)
 ```
 
-### Option A: Claude (recommended)
+### Option A: Claude (smartest, paid)
 
 Get an API key at <https://console.anthropic.com>, then:
 
@@ -67,13 +74,13 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 setx ANTHROPIC_API_KEY "sk-ant-..."
 ```
 
-### Option B: free and local with Ollama
+### Option B: free and local with Ollama (default when no API key is set)
 
 Install [Ollama](https://ollama.com), then:
 
 ```bash
-ollama pull llama3.1
-vector --provider ollama        # or set provider = "ollama" in the config
+ollama pull llama3.2
+vector                          # uses Ollama automatically when no Claude key is set
 ```
 
 Small local models are less reliable at multi-step tasks than Claude, but nothing leaves your machine.

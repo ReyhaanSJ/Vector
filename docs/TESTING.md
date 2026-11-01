@@ -45,7 +45,8 @@ Type each of these and tick it off when it works:
 
 ## 4. Fresh install
 
-- [ ] Clone into a new folder and run `scripts\install-windows.ps1` from a clean PowerShell window
+- [ ] Download the ZIP, extract it and double-click `Install VECTOR.bat`; time how long it takes
+- [ ] Start Menu > VECTOR > Uninstall VECTOR removes everything
 - [ ] `vector --startup on`, sign out and in again: VECTOR opens. Then `vector --startup off`.
 
 ## Ready to launch when

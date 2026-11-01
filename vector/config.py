@@ -9,6 +9,7 @@ Settings come from (lowest to highest priority):
 from __future__ import annotations
 
 import os
+import re
 import tomllib
 from dataclasses import dataclass, field, fields
 from pathlib import Path
@@ -21,11 +22,12 @@ DEFAULT_CONFIG_TOML = """\
 # Who VECTOR is talking to.
 user_name = "Boss"
 
-# "anthropic" (Claude, needs ANTHROPIC_API_KEY) or "ollama" (free, runs locally).
-provider = "anthropic"
+# "ollama" (free, runs on this computer), "anthropic" (Claude, needs ANTHROPIC_API_KEY)
+# or "auto" (Claude if an API key is set, otherwise Ollama).
+provider = "auto"
 
-# Leave empty to use the provider default
-# (anthropic: claude-opus-5-5, ollama: llama3.1).
+# Leave empty to use the default (Claude: claude-opus-5-5, Ollama: llama3.2).
+# Change it any time with:  vector --set model=qwen2.5:7b
 model = ""
 
 # Claude only: low | medium | high | xhigh | max. Low keeps replies snappy.
@@ -50,7 +52,7 @@ skill_dirs = []
 @dataclass
 class Config:
     user_name: str = "Boss"
-    provider: str = "anthropic"
+    provider: str = "auto"
     model: str = ""
     effort: str = "low"
     ollama_url: str = "http://localhost:11434"
@@ -64,10 +66,21 @@ class Config:
         return HOME_DIR
 
     @property
+    def resolved_provider(self) -> str:
+        """The provider actually used: "auto" means Claude when a key is set, else Ollama."""
+        provider = self.provider.lower().strip()
+        if provider == "claude":
+            return "anthropic"
+        if provider == "auto":
+            has_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")
+            return "anthropic" if has_key else "ollama"
+        return provider
+
+    @property
     def resolved_model(self) -> str:
         if self.model:
             return self.model
-        return "llama3.1" if self.provider == "ollama" else "claude-opus-5-5"
+        return "llama3.2" if self.resolved_provider == "ollama" else "claude-opus-5-5"
 
 
 def config_path() -> Path:
@@ -106,3 +119,33 @@ def write_default_config(path: Path | None = None, overwrite: bool = False) -> P
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(DEFAULT_CONFIG_TOML, encoding="utf-8")
     return path
+
+
+def set_config_value(key: str, value: str, path: Path | None = None) -> Path:
+    """Change one setting in the config file, keeping the comments around it."""
+    known = {f.name: f for f in fields(Config)}
+    if key not in known:
+        raise KeyError(f"Unknown setting '{key}'. Settings: {', '.join(known)}")
+    default = getattr(Config(), key)
+    parsed = _coerce(value, default)
+    if isinstance(parsed, bool):
+        literal = "true" if parsed else "false"
+    elif isinstance(parsed, list):
+        literal = "[" + ", ".join(_toml_str(v) for v in parsed) + "]"
+    else:
+        literal = _toml_str(str(parsed))
+    path = write_default_config(path)
+    lines = path.read_text(encoding="utf-8").splitlines()
+    pattern = re.compile(rf"^\s*{re.escape(key)}\s*=")
+    for i, line in enumerate(lines):
+        if pattern.match(line):
+            lines[i] = f"{key} = {literal}"
+            break
+    else:
+        lines.append(f"{key} = {literal}")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def _toml_str(text: str) -> str:
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'

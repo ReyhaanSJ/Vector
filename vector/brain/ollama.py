@@ -44,7 +44,9 @@ class OllamaBrain(Brain):
             raise BrainError(f"Ollama error {exc.code}: {body}") from exc
         except urllib.error.URLError as exc:
             raise BrainError(
-                f"Can't reach Ollama at {self.base_url}. Is it installed and running? (ollama serve)"
+                f"Can't reach the free local AI (Ollama) at {self.base_url}. Install it from "
+                "https://ollama.com, or if it's installed, start the Ollama app. "
+                "Have a Claude API key instead? Set ANTHROPIC_API_KEY."
             ) from exc
 
     def respond(self, user_text: str, system: str, tools: list[Tool], execute: ToolExecutor) -> str:

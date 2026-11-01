@@ -1,22 +1,39 @@
 # VECTOR on Windows 10/11
 
-## Install (about 5 minutes)
+## Install (about 5 minutes, mostly downloading)
 
-1. Install **Git** and **Python 3.13** if you don't have them. In PowerShell:
-   ```powershell
-   winget install -e --id Git.Git
-   winget install -e --id Python.Python.3.13
-   ```
-   Then close PowerShell and open a new window.
-2. Download VECTOR and run the installer:
-   ```powershell
-   git clone https://github.com/reyhaansj/vector.git
-   cd vector
-   powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1
-   ```
-   The installer sets up Python packages, adds a `vector` command, asks for your Claude API key
-   (or sets up free local AI with Ollama), and can make VECTOR start when you log in.
-3. Open a **new** terminal and run `vector` (typing) or `vector --voice` (talking).
+1. On the VECTOR GitHub page: green **Code** button → **Download ZIP**.
+2. Open Downloads, right-click the ZIP → **Extract All** → **Extract**.
+3. In the extracted folder, double-click **`Install VECTOR.bat`**.
+   If Windows says "Windows protected your PC", click **More info → Run anyway**
+   (it appears for any downloaded script).
+4. Answer the questions. Pressing **Enter** picks the suggested answer every time.
+
+Setup then:
+- gets a private copy of Python 3.13 just for VECTOR (any Python you already have is left alone),
+- installs VECTOR into `%LOCALAPPDATA%\Programs\VECTOR`, so you can delete the downloaded folder,
+- sets up the AI: the **free** local AI (installs Ollama and picks a model your graphics card
+  runs fast), or Claude if you paste an API key,
+- adds a `vector` command and **VECTOR** shortcuts on the Desktop and in the Start Menu.
+
+Run `Install VECTOR.bat` again any time to update. Remove everything with
+**Start Menu > VECTOR > Uninstall VECTOR**.
+
+### Changing settings later
+
+```powershell
+vector --set model=qwen2.5:14b      # a smarter free model (needs more memory)
+vector --set provider=anthropic     # switch to Claude (needs ANTHROPIC_API_KEY)
+vector --set user_name=Ray          # what VECTOR calls you
+```
+
+| Graphics card memory | Suggested free model |
+|---|---|
+| none / under 6 GB | `llama3.2` (setup's pick) |
+| 6-8 GB (e.g. RTX 4050/5050) | `qwen2.5:7b` (setup's pick) |
+| 12 GB+, or 8 GB and patience | `qwen2.5:14b` |
+
+Get a new model with `ollama pull <name>`, then `vector --set model=<name>`.
 
 ## Windows-only skills
 
@@ -46,9 +63,10 @@ vector --startup off    # stop
 
 | Problem | Fix |
 |---|---|
-| `vector` is not recognized | Open a new terminal. Or run `.venv\Scripts\vector.exe` from the VECTOR folder. |
-| "running scripts is disabled" | Use the exact command above (`-ExecutionPolicy Bypass`). |
-| Voice packages fail to install | Use Python 3.13 (`winget install Python.Python.3.13`), then re-run the installer. |
+| `vector` is not recognized | Open a new terminal, or use the Desktop shortcut. |
+| "Windows protected your PC" | Click **More info → Run anyway**. |
+| "Can't reach the free local AI" | Start the **Ollama** app from the Start Menu, then try again. |
+| "Ollama doesn't have 'model'" | Run `ollama pull <model>` with the name it shows. |
 | VECTOR can't hear you | Settings > Privacy & security > Microphone: turn on **Let desktop apps access your microphone**. Check the right mic is the default under Settings > System > Sound. |
 | It hears "Victor" | That's fine, "Victor" and "Vektor" also work as wake words. |
 | No notifications | Settings > System > Notifications: make sure notifications (and Windows PowerShell) are on, and Do Not Disturb is off. |

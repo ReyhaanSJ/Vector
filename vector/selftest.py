@@ -215,7 +215,7 @@ def check_brain(config) -> str:
     if "ONLINE" not in reply.upper():
         raise RuntimeError(f"unexpected reply: {reply[:80]}")
     _brain_ok = True
-    return f"{config.provider} / {config.resolved_model} answered"
+    return f"{config.resolved_provider} / {config.resolved_model} answered"
 
 
 def check_agent_uses_tools(config) -> str:

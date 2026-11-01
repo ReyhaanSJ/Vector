@@ -72,7 +72,9 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="vector", description="VECTOR - an AI assistant for your laptop.")
     p.add_argument("request", nargs="*", help="a one-off request, e.g. vector open spotify")
     p.add_argument("--voice", action="store_true", help="hands-free voice mode")
-    p.add_argument("--provider", help="anthropic or ollama (overrides config)")
+    p.add_argument("--provider", help="ollama, anthropic or auto (overrides config)")
+    p.add_argument("--set", metavar="KEY=VALUE", action="append",
+                   help="save a setting, e.g. --set model=qwen2.5:7b or --set user_name=Ray")
     p.add_argument("--model", help="model name (overrides config)")
     p.add_argument("--yes", action="store_true", help="don't ask before risky actions (careful!)")
     p.add_argument("--setup", action="store_true", help="write a default config file")
@@ -92,6 +94,22 @@ def list_skills(vector) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    if args.set:
+        from vector.config import set_config_value
+
+        for item in args.set:
+            key, sep, value = item.partition("=")
+            if not sep:
+                print(f"{RED}Use KEY=VALUE, e.g. --set model=qwen2.5:7b{RESET}")
+                return 1
+            try:
+                path = set_config_value(key.strip(), value.strip())
+            except KeyError as exc:
+                print(f"{RED}{exc.args[0]}{RESET}")
+                return 1
+            print(f"Saved {key.strip()} = {value.strip()}  ({path})")
+        return 0
 
     if args.setup:
         path = write_default_config()
