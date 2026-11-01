@@ -18,8 +18,12 @@ def create_brain(config: Config) -> Brain:
         from vector.brain.claude import ClaudeBrain
 
         return ClaudeBrain(model=config.resolved_model, effort=config.effort)
+    if provider == "openrouter":
+        from vector.brain.openai_compat import OpenAICompatBrain
+
+        return OpenAICompatBrain(model=config.resolved_model)
     if provider == "ollama":
         from vector.brain.ollama import OllamaBrain
 
         return OllamaBrain(model=config.resolved_model, base_url=config.ollama_url)
-    raise BrainError(f"Unknown provider '{config.provider}'. Use 'ollama', 'anthropic' or 'auto'.")
+    raise BrainError(f"Unknown provider '{config.provider}'. Use 'ollama', 'openrouter', 'anthropic' or 'auto'.")

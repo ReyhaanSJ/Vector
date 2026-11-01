@@ -37,7 +37,8 @@ Windows · macOS · Linux · Claude or fully local (Ollama) · MIT licensed
 
 ### Windows 10/11: two clicks, nothing to install first
 
-1. Download VECTOR: green **Code** button → **Download ZIP**, then right-click it → **Extract All**.
+1. Download **`VECTOR-Setup-<version>.zip`** from the [Releases page](https://github.com/ReyhaanSJ/Vector/releases),
+   then right-click it → **Extract All**.
 2. Double-click **`Install VECTOR.bat`**.
 
 That's it. Setup gets its own copy of Python, installs VECTOR, sets up the **free** local AI
@@ -74,7 +75,19 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 setx ANTHROPIC_API_KEY "sk-ant-..."
 ```
 
-### Option B: free and local with Ollama (default when no API key is set)
+### Option B: free cloud AI with OpenRouter
+
+Free models such as **Qwen3.8 27B** run on OpenRouter's servers: much smarter than a small
+local model, with no strong graphics card needed. Free models have daily limits, and your requests
+are sent to OpenRouter and the model's provider.
+
+```bash
+# make a free key at https://openrouter.ai/keys, then:
+export OPENROUTER_API_KEY="sk-or-..."      # Windows: setx OPENROUTER_API_KEY "sk-or-..."
+vector --set provider=openrouter          # uses qwen/qwen3.8-27b:free by default
+```
+
+### Option C: free and local with Ollama (default when no API key is set)
 
 Install [Ollama](https://ollama.com), then:
 
@@ -130,6 +143,21 @@ speech-to-text (faster-whisper) and microphone access (sounddevice). The speech 
 (~200 MB) download once; `vector --prepare-voice` fetches them ahead of time.
 Pick a speech model with `vector --set whisper_model=small.en`. It's more accurate but slower.
 `tiny.en` is the fastest.
+
+## Updating
+
+The VECTOR app checks for a new version once a day. When there is one, right-click the tray icon and choose
+**Update to x.y.z**. It downloads, installs and restarts by itself, and keeps your settings and memory.
+
+```bash
+vector --versions          # every version, newest first
+vector --update            # install the newest
+vector --update 0.2.0      # install a specific version (also to go back)
+```
+
+Versions are published on the [Releases page](https://github.com/ReyhaanSJ/Vector/releases).
+Maintainers: bump the version in `pyproject.toml` and `vector/__init__.py`, then push a tag such
+as `v0.3.0` and the release builds itself.
 
 ## Configuration
 

@@ -16,6 +16,7 @@ import threading
 import traceback
 from collections.abc import Callable
 
+from vector import __version__
 from vector.config import Config, load_config
 
 log = logging.getLogger("vector.app")
@@ -270,6 +271,7 @@ class VectorApp:
         self.tray = None
         self.hotkey = None
         self._current_source = "typed"
+        self.update = None
 
         hotkey_label = "+".join(p.capitalize() for p in config.hotkey.split("+"))
         self.bar = SummonBar(self.root, self.submit_typed, self.toggle_voice, hotkey_label)
@@ -294,6 +296,8 @@ class VectorApp:
                 self.notify(f"Shortcut unavailable: {self.hotkey.error}")
         if enable_tray:
             self._start_tray()
+        if enable_tray and config.check_updates:
+            self.root.after(15000, self.check_updates)  # once things have settled
         if enable_voice and config.listen_on_start:
             self.toggle_voice()
         else:
@@ -492,6 +496,11 @@ class VectorApp:
             pystray.MenuItem("Listen for “Vector”", lambda: self.ui(self.toggle_voice),
                              checked=lambda item: self.voice_on, enabled=lambda item: self.voice_available),
             pystray.Menu.SEPARATOR,
+            pystray.MenuItem(lambda item: f"Update to {self.update.version}" if self.update else "",
+                             lambda: self.start_update(), visible=lambda item: self.update is not None),
+            pystray.MenuItem("Check for updates", lambda: self.check_updates(force=True)),
+            pystray.MenuItem(f"About VECTOR {__version__}", lambda: None, enabled=False),
+            pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quit VECTOR", lambda: self.ui(self.quit)),
         )
         self.tray = pystray.Icon("VECTOR", img, "VECTOR", menu)
@@ -500,6 +509,53 @@ class VectorApp:
         except Exception:
             log.exception("tray icon failed")
             self.tray = None
+
+    # -- updates ------------------------------------------------------------------------------
+    def check_updates(self, force: bool = False) -> None:
+        """Look for a newer VECTOR in the background; tell the user if there is one."""
+        def work():
+            from vector.updater import UpdateError, check_for_update
+
+            try:
+                release = check_for_update(force=force)
+            except UpdateError as exc:
+                if force:
+                    self.notify(str(exc))
+                return
+            except Exception:
+                log.exception("update check failed")
+                return
+            self.update = release
+            if self.tray is not None:
+                try:
+                    self.tray.update_menu()
+                except Exception:
+                    pass
+            if release:
+                self.notify(f"VECTOR {release.version} is available. "
+                            "Right-click the VECTOR tray icon > Update.")
+            elif force:
+                self.notify(f"You have the newest VECTOR ({__version__}).")
+
+        threading.Thread(target=work, name="vector-update-check", daemon=True).start()
+
+    def start_update(self) -> None:
+        release = self.update
+        if release is None:
+            return
+
+        def work():
+            from vector.updater import UpdateError, install_release
+
+            self.notify(f"Downloading VECTOR {release.version}...")
+            try:
+                install_release(release)
+            except UpdateError as exc:
+                self.notify(str(exc))
+                return
+            self.ui(self.quit)  # the installer reopens VECTOR when it's done
+
+        threading.Thread(target=work, name="vector-update", daemon=True).start()
 
     # -- lifecycle ----------------------------------------------------------------------------
     def quit(self) -> None:

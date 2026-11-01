@@ -60,6 +60,16 @@ jobs:
           if ("${{ matrix.ai }}" -eq "ollama") {
             if (-not (Select-String -Path "$env:USERPROFILE\.vector\config.toml" -Pattern '^provider = "ollama"')) { throw "ollama not configured" }
           }
+      - name: Update over the top keeps settings
+        shell: cmd
+        env:
+          VECTOR_INSTALL_KEEP_SETTINGS: "1"
+          VECTOR_INSTALL_AI: claude
+        run: |
+          echo.| "Install VECTOR.bat"
+          findstr /R /C:"^provider = " "%USERPROFILE%\.vector\config.toml"
+          findstr /C:"provider = \"anthropic\"" "%USERPROFILE%\.vector\config.toml" && exit /b 1
+          exit /b 0
       - name: Uninstall
         shell: pwsh
         run: |

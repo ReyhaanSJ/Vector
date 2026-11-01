@@ -22,11 +22,15 @@ DEFAULT_CONFIG_TOML = """\
 # Who VECTOR is talking to.
 user_name = "Boss"
 
-# "ollama" (free, runs on this computer), "anthropic" (Claude, needs ANTHROPIC_API_KEY)
-# or "auto" (Claude if an API key is set, otherwise Ollama).
+# Which AI runs VECTOR:
+#   "ollama"     free, runs on this computer
+#   "openrouter" free cloud models like Qwen3.8 27B (needs a free OPENROUTER_API_KEY)
+#   "anthropic"  Claude, the smartest (needs a paid ANTHROPIC_API_KEY)
+#   "auto"       Claude if its key is set, else OpenRouter if its key is set, else Ollama
 provider = "auto"
 
-# Leave empty to use the default (Claude: claude-opus-5-5, Ollama: llama3.2).
+# Leave empty for the default
+# (Claude: claude-opus-5-5, OpenRouter: qwen/qwen3.8-27b:free, Ollama: llama3.2).
 # Change it any time with:  vector --set model=qwen2.5:7b
 model = ""
 
@@ -51,9 +55,19 @@ whisper_model = "base.en"
 # Keyboard shortcut that pops up the summon bar from anywhere.
 hotkey = "ctrl+shift+space"
 
+# Check GitHub once a day for a new VECTOR version and offer it from the tray icon.
+check_updates = true
+
 # Extra folders to load your own skills from (*.py files using @tool).
 skill_dirs = []
 """
+
+
+DEFAULT_MODELS = {
+    "anthropic": "claude-opus-5-5",
+    "openrouter": "qwen/qwen3.8-27b:free",
+    "ollama": "llama3.2",
+}
 
 
 @dataclass
@@ -69,6 +83,7 @@ class Config:
     listen_on_start: bool = True
     whisper_model: str = "base.en"
     hotkey: str = "ctrl+shift+space"
+    check_updates: bool = True
     skill_dirs: list[str] = field(default_factory=list)
 
     @property
@@ -82,15 +97,18 @@ class Config:
         if provider == "claude":
             return "anthropic"
         if provider == "auto":
-            has_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")
-            return "anthropic" if has_key else "ollama"
+            if os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"):
+                return "anthropic"
+            if os.environ.get("OPENROUTER_API_KEY"):
+                return "openrouter"
+            return "ollama"
         return provider
 
     @property
     def resolved_model(self) -> str:
         if self.model:
             return self.model
-        return "llama3.2" if self.resolved_provider == "ollama" else "claude-opus-5-5"
+        return DEFAULT_MODELS.get(self.resolved_provider, "claude-opus-5-5")
 
 
 def config_path() -> Path:

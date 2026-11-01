@@ -13,12 +13,15 @@
     VECTOR_INSTALL_YES=1          accept every default without asking
     VECTOR_INSTALL_AI=ollama|claude|none
     VECTOR_INSTALL_SKIP_MODEL=1   don't download the Ollama model
+    VECTOR_INSTALL_VERSION=0.2.0  install that version (default: the newest release)
+    VECTOR_INSTALL_KEEP_SETTINGS=1  updating: keep the AI choice and login setting
+    VECTOR_INSTALL_LAUNCH=1       open VECTOR when done
 #>
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"   # makes downloads much faster in Windows PowerShell
 
-$RepoZip = "https://github.com/ReyhaanSJ/Vector/archive/HEAD.zip"
+$Repo    = "ReyhaanSJ/Vector"
 $AppDir  = Join-Path $env:LOCALAPPDATA "Programs\VECTOR"
 $AppSrc  = Join-Path $AppDir "src"
 $Venv    = Join-Path $AppDir ".venv"
@@ -54,7 +57,18 @@ $Source = $null
 if ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot "pyproject.toml"))) {
     $Source = $PSScriptRoot
 } else {
-    Say "Downloading the latest version..."
+    if ($env:VECTOR_INSTALL_VERSION) {
+        $tag = "v" + $env:VECTOR_INSTALL_VERSION.TrimStart("vV")
+        $RepoZip = "https://github.com/$Repo/archive/refs/tags/$tag.zip"
+        Say "Downloading VECTOR $tag..."
+    } else {
+        $RepoZip = "https://github.com/$Repo/archive/HEAD.zip"
+        try {
+            $latest = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -UseBasicParsing
+            $RepoZip = "https://github.com/$Repo/archive/refs/tags/$($latest.tag_name).zip"
+            Say "Downloading VECTOR $($latest.tag_name)..."
+        } catch { Say "Downloading the latest version..." }
+    }
     $tmp = Join-Path $env:TEMP ("vector-setup-" + [guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Path $tmp | Out-Null
     $zip = Join-Path $tmp "vector.zip"
@@ -112,17 +126,35 @@ if ($voiceOk -and $env:VECTOR_INSTALL_SKIP_MODEL -ne "1") {
 
 # ---------------------------------------------------------------- 4. AI brain
 Step 4 "Choosing VECTOR's AI brain"
+$Updating = ($env:VECTOR_INSTALL_KEEP_SETTINGS -eq "1") -and (Test-Path (Join-Path $env:USERPROFILE ".vector\config.toml"))
+function Read-Secret([string]$Prompt) {
+    $secure = Read-Host $Prompt -AsSecureString
+    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+    try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr).Trim() }
+    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+}
+function Save-Key([string]$Name, [string]$Value) {
+    [Environment]::SetEnvironmentVariable($Name, $Value, "User")
+    Set-Item -Path "Env:$Name" -Value $Value   # so VECTOR opened from this window sees it too
+    Say "Key saved for your Windows account." Green
+}
 $hasKey = [bool]([Environment]::GetEnvironmentVariable("ANTHROPIC_API_KEY", "User") -or $env:ANTHROPIC_API_KEY)
-if ($AiChoice -eq "ask") {
-    if ($Auto) { $AiChoice = if ($hasKey) { "claude" } else { "ollama" } }
+$hasOpenRouter = [bool]([Environment]::GetEnvironmentVariable("OPENROUTER_API_KEY", "User") -or $env:OPENROUTER_API_KEY)
+if ($Updating) {
+    Say "Updating: keeping your AI settings."
+    $AiChoice = "keep"
+} elseif ($AiChoice -eq "ask") {
+    if ($Auto) { $AiChoice = if ($hasKey) { "claude" } elseif ($hasOpenRouter) { "openrouter" } else { "ollama" } }
     else {
-        Say "  1) Free AI that runs on this computer (Ollama). No account or payment needed."
-        Say "  2) Claude. Smartest, needs an Anthropic API key (paid)."
-        Say "  3) Skip for now"
-        $default = if ($hasKey) { "2" } else { "1" }
-        $pick = (Read-Host "Pick 1, 2 or 3 [Enter = $default]").Trim()
+        Say "  1) Free AI on this computer (Ollama). Private, works offline, no account."
+        Say "  2) Free cloud AI (OpenRouter, Qwen3.8 27B). Smarter and fast, needs internet"
+        Say "     and a free account. Free models have daily limits."
+        Say "  3) Claude. The smartest, needs an Anthropic API key (paid)."
+        Say "  4) Skip for now"
+        $default = if ($hasKey) { "3" } elseif ($hasOpenRouter) { "2" } else { "1" }
+        $pick = (Read-Host "Pick 1, 2, 3 or 4 [Enter = $default]").Trim()
         if (-not $pick) { $pick = $default }
-        $AiChoice = @{ "1" = "ollama"; "2" = "claude"; "3" = "none" }[$pick]
+        $AiChoice = @{ "1" = "ollama"; "2" = "openrouter"; "3" = "claude"; "4" = "none" }[$pick]
         if (-not $AiChoice) { $AiChoice = "none" }
     }
 }
@@ -168,19 +200,23 @@ if ($AiChoice -eq "ollama") {
             if ($LASTEXITCODE -ne 0) { Say "Download failed. Later, run:  ollama pull $Model" Yellow }
         }
     }
+} elseif ($AiChoice -eq "openrouter") {
+    if (-not $hasOpenRouter -and -not $Auto) {
+        Say "1. Sign up free at https://openrouter.ai"
+        Say "2. Make a key at https://openrouter.ai/keys"
+        $key = Read-Secret "3. Paste the key here (it stays hidden)"
+        if ($key) { Save-Key "OPENROUTER_API_KEY" $key }
+    }
+    & $Py -m vector --set provider=openrouter --set "model=qwen/qwen3.8-27b:free" | Out-Null
 } elseif ($AiChoice -eq "claude") {
     if (-not $hasKey -and -not $Auto) {
         Say "Get a key at https://console.anthropic.com (API keys page)."
-        $secure = Read-Host "Paste your API key (it stays hidden)" -AsSecureString
-        $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
-        $key = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
-        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
-        if ($key) {
-            [Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", $key.Trim(), "User")
-            Say "Key saved for your Windows account." Green
-        }
+        $key = Read-Secret "Paste your API key (it stays hidden)"
+        if ($key) { Save-Key "ANTHROPIC_API_KEY" $key }
     }
-    & $Py -m vector --set provider=anthropic | Out-Null
+    & $Py -m vector --set provider=anthropic --set model= | Out-Null
+} elseif ($AiChoice -eq "keep") {
+    # nothing to do
 } else {
     Say "Skipped. Set it up later by running this setup again."
 }
@@ -211,7 +247,10 @@ if ($env:VECTOR_INSTALL_NO_SHORTCUTS -ne "1") {
     Add-Shortcut (Join-Path $menu "Uninstall VECTOR.lnk") "powershell.exe" "-NoProfile -ExecutionPolicy Bypass -File `"$uninstaller`"" "Remove VECTOR from this computer"
 }
 
-if (AskYes "Start VECTOR quietly in the background when you log in? (recommended)" $true) {
+$loginLink = Join-Path ([Environment]::GetFolderPath("Startup")) "VECTOR.lnk"
+if ($Updating) {
+    if (Test-Path $loginLink) { & $Py -m vector --startup on | Out-Null }   # refresh the link
+} elseif (AskYes "Start VECTOR quietly in the background when you log in? (recommended)" $true) {
     & $Py -m vector --startup on | Out-Null
 }
 
@@ -226,4 +265,11 @@ if ($voiceOk) { Write-Host "    - or just say `"Vector, what time is it?`"" -For
 Write-Host "  Check everything works:  vector --selftest" -ForegroundColor DarkGray
 Write-Host "  Remove it later: Start Menu > VECTOR > Uninstall VECTOR" -ForegroundColor DarkGray
 Write-Host ""
-if (-not $Auto -and (AskYes "Open VECTOR now?" $true)) { Start-Process -FilePath $AppExe }
+$version = (& $Exe --version) -replace "VECTOR ", ""
+Write-Host "  Installed VECTOR $version" -ForegroundColor DarkGray
+if ($env:VECTOR_INSTALL_LAUNCH -eq "1") {
+    Start-Process -FilePath $AppExe
+    Start-Sleep -Seconds 3   # let people read the result before this window closes
+} elseif (-not $Auto -and (AskYes "Open VECTOR now?" $true)) {
+    Start-Process -FilePath $AppExe
+}

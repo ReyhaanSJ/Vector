@@ -129,3 +129,34 @@ def test_ollama_tool_loop():
     assert sent[0]["messages"][0]["role"] == "system"
     assert sent[1]["messages"][-1] == {"role": "tool", "content": "Hello Bo", "tool_name": "greet"}
     assert sent[0]["tools"][0]["type"] == "function"
+
+
+def test_openrouter_tool_loop():
+    from vector.brain.openai_compat import OpenAICompatBrain
+
+    replies = [
+        {"choices": [{"message": {"content": None, "tool_calls": [
+            {"id": "c1", "type": "function", "function": {"name": "greet", "arguments": '{"name": "Cy"}'}}]}}]},
+        {"choices": [{"message": {"content": "Greeted Cy."}}]},
+    ]
+    sent = []
+
+    def post(payload):
+        sent.append(payload)
+        return replies.pop(0)
+
+    v = make_vector(OpenAICompatBrain("qwen/qwen3.8-27b:free", api_key="k", post=post))
+    assert v.ask("greet Cy") == "Greeted Cy."
+    assert calls == ["Cy"]
+    assert sent[0]["model"] == "qwen/qwen3.8-27b:free" and sent[0]["tool_choice"] == "auto"
+    assert sent[1]["messages"][-1] == {"role": "tool", "tool_call_id": "c1", "content": "Hello Cy"}
+
+
+def test_openrouter_needs_key():
+    from vector.brain.openai_compat import OpenAICompatBrain
+
+    brain = OpenAICompatBrain("m", api_key="")
+    v = make_vector(brain)
+    with pytest.raises(BrainError, match="openrouter.ai/keys"):
+        v.ask("hi")
+    assert brain.messages == []

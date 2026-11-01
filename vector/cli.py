@@ -77,7 +77,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--voice", action="store_true", help="hands-free voice mode in this terminal")
     p.add_argument("--prepare-voice", action="store_true",
                    help="download the offline speech models now (~200 MB, once)")
-    p.add_argument("--provider", help="ollama, anthropic or auto (overrides config)")
+    p.add_argument("--provider", help="ollama, openrouter, anthropic or auto (overrides config)")
+    p.add_argument("--update", nargs="?", const="latest", metavar="VERSION",
+                   help="install the newest VECTOR (or a specific version, e.g. --update 0.2.0)")
+    p.add_argument("--versions", action="store_true", help="list every VECTOR version")
     p.add_argument("--set", metavar="KEY=VALUE", action="append",
                    help="save a setting, e.g. --set model=qwen2.5:7b or --set user_name=Ray")
     p.add_argument("--model", help="model name (overrides config)")
@@ -123,6 +126,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.startup:
         return set_startup(args.startup)
+
+    if args.versions:
+        return show_versions()
+
+    if args.update:
+        return run_update(args.update)
 
     if args.app:
         from vector.app import main as app_main
@@ -223,6 +232,51 @@ def text_loop(vector) -> int:
             print(f"{DIM}  (interrupted){RESET}")
             continue
         print(f"{CYAN}VECTOR >{RESET} {reply}\n")
+
+
+def show_versions() -> int:
+    from vector import __version__
+    from vector.updater import UpdateError, list_releases, same_version
+
+    try:
+        releases = list_releases(include_prereleases=True)
+    except UpdateError as exc:
+        print(f"{RED}{exc}{RESET}")
+        return 1
+    if not releases:
+        print("No versions have been released yet.")
+        return 0
+    for r in releases:
+        here = same_version(r.tag, __version__)
+        mark = f"{CYAN}* installed{RESET}" if here else ""
+        tag = " (preview)" if r.prerelease else ""
+        headline = next((ln.strip("#* ").strip() for ln in r.notes.splitlines() if ln.strip()), "")
+        print(f"  {r.version:<10} {r.published}  {mark}{tag}")
+        if headline:
+            print(f"    {DIM}{headline[:90]}{RESET}")
+    print(f"\n{DIM}Install one with: vector --update <version>{RESET}")
+    return 0
+
+
+def run_update(target: str) -> int:
+    from vector import __version__
+    from vector.updater import UpdateError, check_for_update, find_release, install_release
+
+    try:
+        if target == "latest":
+            release = check_for_update(force=True)
+            if release is None:
+                print(f"You have the newest VECTOR ({__version__}).")
+                return 0
+        else:
+            release = find_release(target)
+        print(f"Installing VECTOR {release.version} (you have {__version__})...")
+        install_release(release)
+    except UpdateError as exc:
+        print(f"{RED}{exc}{RESET}")
+        return 1
+    print("The installer opened in a new window. VECTOR restarts when it's done.")
+    return 0
 
 
 def prepare_voice() -> int:

@@ -2,7 +2,7 @@
 
 ## Install (about 5 minutes, mostly downloading)
 
-1. On the VECTOR GitHub page: green **Code** button → **Download ZIP**.
+1. On the VECTOR GitHub page, open **Releases** and download the newest **`VECTOR-Setup-x.y.z.zip`**.
 2. Open Downloads, right-click the ZIP → **Extract All** → **Extract**.
 3. In the extracted folder, double-click **`Install VECTOR.bat`**.
    If Windows says "Windows protected your PC", click **More info → Run anyway**
@@ -16,7 +16,9 @@ Setup then:
   runs fast), or Claude if you paste an API key,
 - adds a `vector` command and **VECTOR** shortcuts on the Desktop and in the Start Menu.
 
-Run `Install VECTOR.bat` again any time to update. Remove everything with
+**Updates:** VECTOR checks daily. Right-click the tray icon → **Update to x.y.z**, or run
+`vector --update`. `vector --versions` lists every version, and `vector --update 0.2.0` installs
+an older one. Remove everything with
 **Start Menu > VECTOR > Uninstall VECTOR**.
 
 ### Using VECTOR
@@ -33,6 +35,7 @@ VECTOR starts with Windows and waits in the background (icon by the clock).
 
 ```powershell
 vector --set model=qwen2.5:14b      # a smarter free model (needs more memory)
+vector --set provider=openrouter    # free cloud AI, Qwen3.8 27B (needs OPENROUTER_API_KEY)
 vector --set provider=anthropic     # switch to Claude (needs ANTHROPIC_API_KEY)
 vector --set user_name=Ray          # what VECTOR calls you
 vector --set hotkey=ctrl+alt+v      # a different summon shortcut
@@ -79,6 +82,8 @@ vector --startup off    # stop
 | `vector` is not recognized | Open a new terminal, or use the Desktop shortcut. |
 | "Windows protected your PC" | Click **More info → Run anyway**. |
 | "Can't reach the free local AI" | Start the **Ollama** app from the Start Menu, then try again. |
+| "Free OpenRouter limit reached" | Free models have daily limits. Wait, or switch: `vector --set provider=ollama`. |
+| "Couldn't find VECTOR's releases" | The GitHub repo is still private. Updates work once it's public. |
 | "Ollama doesn't have 'model'" | Run `ollama pull <model>` with the name it shows. |
 | Shortcut does nothing | Another app uses it. Pick another: `vector --set hotkey=ctrl+alt+v`, then restart VECTOR from the tray. |
 | It reacts when nobody said "Vector" | Lower background noise, or turn listening off from the tray icon. |

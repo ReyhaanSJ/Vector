@@ -49,6 +49,12 @@ Type each of these and tick it off when it works:
 - [ ] Start Menu > VECTOR > Uninstall VECTOR removes everything
 - [ ] `vector --startup on`, sign out and in again: VECTOR opens. Then `vector --startup off`.
 
+## 5. Updates
+
+- [ ] `vector --versions` lists the releases
+- [ ] Install an older version (`vector --update 0.2.0`), then tray icon → **Check for updates**
+      offers the newest. **Update** reinstalls and reopens VECTOR with your settings kept.
+
 ## Ready to launch when
 
 - the self-test passes,
