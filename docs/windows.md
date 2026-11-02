@@ -35,7 +35,8 @@ VECTOR starts with Windows and waits in the background (icon by the clock).
 
 ```powershell
 vector --set model=qwen2.5:14b      # a smarter free model (needs more memory)
-vector --set provider=openrouter    # free cloud AI, Qwen3.8 27B (needs OPENROUTER_API_KEY)
+vector --set provider=openrouter    # free cloud AI (needs OPENROUTER_API_KEY)
+vector --models                     # list the AI models you can use
 vector --set provider=anthropic     # switch to Claude (needs ANTHROPIC_API_KEY)
 vector --set user_name=Ray          # what VECTOR calls you
 vector --set hotkey=ctrl+alt+v      # a different summon shortcut

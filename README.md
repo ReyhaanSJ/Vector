@@ -77,14 +77,15 @@ setx ANTHROPIC_API_KEY "sk-ant-..."
 
 ### Option B: free cloud AI with OpenRouter
 
-Free models such as **Qwen3.8 27B** run on OpenRouter's servers: much smarter than a small
+Free models (like Google's Gemma 4 31B) run on OpenRouter's servers: much smarter than a small
 local model, with no strong graphics card needed. Free models have daily limits, and your requests
 are sent to OpenRouter and the model's provider.
 
 ```bash
 # make a free key at https://openrouter.ai/keys, then:
 export OPENROUTER_API_KEY="sk-or-..."      # Windows: setx OPENROUTER_API_KEY "sk-or-..."
-vector --set provider=openrouter          # uses qwen/qwen3.8-27b:free by default
+vector --set provider=openrouter          # picks the best free model available
+vector --models                           # see the free models; pick one with --set model=<id>
 ```
 
 ### Option C: free and local with Ollama (default when no API key is set)

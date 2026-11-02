@@ -145,18 +145,70 @@ def test_openrouter_tool_loop():
         sent.append(payload)
         return replies.pop(0)
 
-    v = make_vector(OpenAICompatBrain("qwen/qwen3.8-27b:free", api_key="k", post=post))
+    v = make_vector(OpenAICompatBrain("google/gemma-4-31b-it:free", api_key="k", post=post))
     assert v.ask("greet Cy") == "Greeted Cy."
     assert calls == ["Cy"]
-    assert sent[0]["model"] == "qwen/qwen3.8-27b:free" and sent[0]["tool_choice"] == "auto"
+    assert sent[0]["model"] == "google/gemma-4-31b-it:free" and sent[0]["tool_choice"] == "auto"
     assert sent[1]["messages"][-1] == {"role": "tool", "tool_call_id": "c1", "content": "Hello Cy"}
 
 
 def test_openrouter_needs_key():
     from vector.brain.openai_compat import OpenAICompatBrain
 
-    brain = OpenAICompatBrain("m", api_key="")
+    brain = OpenAICompatBrain("m:free", api_key="")
     v = make_vector(brain)
     with pytest.raises(BrainError, match="openrouter.ai/keys"):
         v.ask("hi")
     assert brain.messages == []
+
+
+def test_openrouter_auto_picks_and_recovers():
+    from vector.brain.openai_compat import OpenAICompatBrain, list_free_tool_models, pick_free_model
+
+    catalog = {"data": [
+        {"id": "a/no-tools:free", "supported_parameters": []},
+        {"id": "a/paid", "supported_parameters": ["tools"]},
+        {"id": "google/gemma-4-31b-it:free", "supported_parameters": ["tools"]},
+        {"id": "x/other:free", "supported_parameters": ["tools", "temperature"]},
+    ]}
+    fetch = lambda url: catalog  # noqa: E731
+    assert list_free_tool_models(fetch=fetch) == ["google/gemma-4-31b-it:free", "x/other:free"]
+    assert pick_free_model(["x/other:free"]) == "x/other:free"
+    assert pick_free_model([]) is None
+
+    import io
+    import urllib.error
+
+    sent = []
+
+    def post(payload):
+        sent.append(payload["model"])
+        if payload["model"] == "google/gemma-4-31b-it:free":
+            raise urllib.error.HTTPError("u", 404, "gone", {}, io.BytesIO(b""))
+        return {"choices": [{"message": {"content": "hi from other"}}]}
+
+    brain = OpenAICompatBrain(api_key="k", fetch=fetch)
+    brain._post = lambda p: brain_post(p)
+
+    def brain_post(p):  # route through the real error handling
+        try:
+            return post(p)
+        except urllib.error.HTTPError as exc:
+            from vector.brain.openai_compat import _ModelGone
+            raise _ModelGone("gone") from exc
+
+    v = make_vector(brain)
+    assert v.ask("hello") == "hi from other"
+    assert sent == ["google/gemma-4-31b-it:free", "x/other:free"]
+    assert brain.model == "x/other:free"
+
+
+def test_openrouter_fixed_model_is_not_switched():
+    from vector.brain.openai_compat import OpenAICompatBrain, _ModelGone
+
+    def post(payload):
+        raise _ModelGone("OpenRouter doesn't have the model")
+
+    v = make_vector(OpenAICompatBrain("me/my-model:free", api_key="k", post=post))
+    with pytest.raises(BrainError, match="doesn't have"):
+        v.ask("hi")

@@ -11,7 +11,7 @@ def test_defaults_file_and_env(tmp_path, monkeypatch):
     assert cfg.provider == "auto" and cfg.resolved_provider == "ollama"
     assert cfg.resolved_model == "llama3.2"
     monkeypatch.setenv("OPENROUTER_API_KEY", "or-test")
-    assert cfg.resolved_provider == "openrouter" and cfg.resolved_model == "qwen/qwen3.8-27b:free"
+    assert cfg.resolved_provider == "openrouter" and cfg.resolved_model == "auto:free"
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     assert cfg.resolved_provider == "anthropic" and cfg.resolved_model == "claude-opus-5-5"
     path.write_text('provider = "ollama"\nuser_name = "Ray"\n')

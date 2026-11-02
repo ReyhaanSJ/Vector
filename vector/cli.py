@@ -81,6 +81,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--update", nargs="?", const="latest", metavar="VERSION",
                    help="install the newest VECTOR (or a specific version, e.g. --update 0.2.0)")
     p.add_argument("--versions", action="store_true", help="list every VECTOR version")
+    p.add_argument("--models", action="store_true", help="list the AI models you can use right now")
     p.add_argument("--set", metavar="KEY=VALUE", action="append",
                    help="save a setting, e.g. --set model=qwen2.5:7b or --set user_name=Ray")
     p.add_argument("--model", help="model name (overrides config)")
@@ -129,6 +130,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.versions:
         return show_versions()
+
+    if args.models:
+        return show_models()
 
     if args.update:
         return run_update(args.update)
@@ -232,6 +236,52 @@ def text_loop(vector) -> int:
             print(f"{DIM}  (interrupted){RESET}")
             continue
         print(f"{CYAN}VECTOR >{RESET} {reply}\n")
+
+
+def show_models() -> int:
+    from vector.brain import BrainError
+    from vector.config import load_config
+
+    config = load_config()
+    provider = config.resolved_provider
+    current = config.model or config.resolved_model
+    try:
+        if provider == "openrouter":
+            from vector.brain.openai_compat import list_free_tool_models, pick_free_model
+
+            models = list_free_tool_models()
+            best = pick_free_model(models)
+            print("Free OpenRouter models that can use VECTOR's skills (right now):")
+            for m in models:
+                tags = []
+                if m == best:
+                    tags.append("VECTOR's pick")
+                if m == current:
+                    tags.append("in use")
+                print(f"  {m}" + (f"  {CYAN}<- {', '.join(tags)}{RESET}" if tags else ""))
+            if current == "auto:free":
+                print(f"{DIM}You're on auto:free, so VECTOR uses its pick automatically.{RESET}")
+        elif provider == "ollama":
+            import json
+            import urllib.request
+
+            with urllib.request.urlopen(f"{config.ollama_url}/api/tags", timeout=10) as resp:
+                models = [m["name"] for m in json.loads(resp.read()).get("models", [])]
+            print("AI models downloaded in Ollama:")
+            for m in models:
+                mark = f"  {CYAN}<- in use{RESET}" if m.split(":latest")[0] == current.split(":latest")[0] else ""
+                print(f"  {m}{mark}")
+            print(f"{DIM}Get more with: ollama pull <name>  (see https://ollama.com/library){RESET}")
+        else:
+            print(f"Using Claude ({current}). Models: claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5")
+    except BrainError as exc:
+        print(f"{RED}{exc}{RESET}")
+        return 1
+    except OSError:
+        print(f"{RED}Couldn't reach Ollama. Is it running?{RESET}")
+        return 1
+    print(f"{DIM}Switch with: vector --set model=<name>, then restart VECTOR.{RESET}")
+    return 0
 
 
 def show_versions() -> int:

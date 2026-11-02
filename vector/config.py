@@ -24,14 +24,15 @@ user_name = "Boss"
 
 # Which AI runs VECTOR:
 #   "ollama"     free, runs on this computer
-#   "openrouter" free cloud models like Qwen3.8 27B (needs a free OPENROUTER_API_KEY)
+#   "openrouter" free cloud models (needs a free OPENROUTER_API_KEY)
 #   "anthropic"  Claude, the smartest (needs a paid ANTHROPIC_API_KEY)
 #   "auto"       Claude if its key is set, else OpenRouter if its key is set, else Ollama
 provider = "auto"
 
 # Leave empty for the default
-# (Claude: claude-opus-5-5, OpenRouter: qwen/qwen3.8-27b:free, Ollama: llama3.2).
-# Change it any time with:  vector --set model=qwen2.5:7b
+# (Claude: claude-opus-5-5, Ollama: llama3.2, OpenRouter: "auto:free" = the best free
+# model available right now). See the options with:  vector --models
+# Change it any time with:  vector --set model=google/gemma-4-31b-it:free
 model = ""
 
 # Claude only: low | medium | high | xhigh | max. Low keeps replies snappy.
@@ -65,7 +66,7 @@ skill_dirs = []
 
 DEFAULT_MODELS = {
     "anthropic": "claude-opus-5-5",
-    "openrouter": "qwen/qwen3.8-27b:free",
+    "openrouter": "auto:free",
     "ollama": "llama3.2",
 }
 

@@ -162,7 +162,7 @@ if ($Updating) {
     if ($Auto) { $AiChoice = if ($hasKey) { "claude" } elseif ($hasOpenRouter) { "openrouter" } else { "ollama" } }
     else {
         Say "  1) Free AI on this computer (Ollama). Private, works offline, no account."
-        Say "  2) Free cloud AI (OpenRouter, Qwen3.8 27B). Smarter and fast, needs internet"
+        Say "  2) Free cloud AI (OpenRouter: the best free model available). Smarter, needs internet"
         Say "     and a free account. Free models have daily limits."
         Say "  3) Claude. The smartest, needs an Anthropic API key (paid)."
         Say "  4) Skip for now"
@@ -230,7 +230,7 @@ if ($AiChoice -eq "ollama") {
         $key = Read-Secret "3. Paste the key here (it stays hidden)"
         if ($key) { Save-Key "OPENROUTER_API_KEY" $key }
     }
-    & $Py -m vector --set provider=openrouter --set "model=qwen/qwen3.8-27b:free" | Out-Null
+    & $Py -m vector --set provider=openrouter --set "model=auto:free" | Out-Null
 } elseif ($AiChoice -eq "claude") {
     if (-not $hasKey -and -not $Auto) {
         Say "Get a key at https://console.anthropic.com (API keys page)."
