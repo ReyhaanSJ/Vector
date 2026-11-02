@@ -95,8 +95,8 @@ class Config:
     def resolved_provider(self) -> str:
         """The provider actually used: "auto" means Claude when a key is set, else Ollama."""
         provider = self.provider.lower().strip()
-        if provider == "claude":
-            return "anthropic"
+        if provider == "claude" or self.model.lower().startswith("claude-"):
+            return "anthropic"  # a Claude model name always means Claude
         if provider == "auto":
             if os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"):
                 return "anthropic"
@@ -178,3 +178,17 @@ def set_config_value(key: str, value: str, path: Path | None = None) -> Path:
 
 def _toml_str(text: str) -> str:
     return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def describe_model(provider: str, model: str) -> str:
+    """Friendly name for the footer and terminal: 'claude-haiku-5-5' -> 'Claude Haiku 5.5'."""
+    if provider == "anthropic" and model.startswith("claude-"):
+        parts = model.split("-")[1:]
+        words = [p.capitalize() for p in parts if not p.isdigit()]
+        numbers = [p for p in parts if p.isdigit()]
+        return " ".join(["Claude", *words]) + (" " + ".".join(numbers) if numbers else "")
+    if model == "auto:free":
+        return "Free cloud AI (auto)"
+    name = model.split("/")[-1].removesuffix(":free")
+    where = {"ollama": "local", "openrouter": "free cloud"}.get(provider)
+    return f"{name} ({where})" if where else name

@@ -260,6 +260,8 @@ if ($env:VECTOR_INSTALL_NO_SHORTCUTS -ne "1") {
         $lnk.Arguments = $Arguments
         $lnk.WorkingDirectory = $env:USERPROFILE
         $lnk.Description = $Description
+        $icon = Join-Path $AppSrc "vector\assets\icon.ico"
+        if (Test-Path $icon) { $lnk.IconLocation = "$icon,0" }
         $lnk.Save()
     }
     $desktop = [Environment]::GetFolderPath("Desktop")

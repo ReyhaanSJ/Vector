@@ -37,3 +37,22 @@ def test_set_config_value_keeps_comments(tmp_path):
     assert (cfg.model, cfg.provider, cfg.confirm_dangerous) == ("qwen2.5:7b", "ollama", False)
     with pytest.raises(KeyError):
         set_config_value("nope", "1", path)
+
+
+def test_claude_model_names_mean_claude(monkeypatch):
+    from vector.config import Config
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    cfg = Config(provider="openrouter", model="claude-haiku-5-5")
+    assert cfg.resolved_provider == "anthropic"
+    assert Config(provider="openrouter", model="google/gemma-4-31b-it:free").resolved_provider == "openrouter"
+
+
+def test_describe_model():
+    from vector.config import describe_model
+
+    assert describe_model("anthropic", "claude-haiku-5-5") == "Claude Haiku 5.5"
+    assert describe_model("anthropic", "claude-opus-5-5") == "Claude Opus 5.5"
+    assert describe_model("openrouter", "auto:free") == "Free cloud AI (auto)"
+    assert describe_model("openrouter", "google/gemma-4-31b-it:free") == "gemma-4-31b-it (free cloud)"
+    assert describe_model("ollama", "qwen2.5:7b") == "qwen2.5:7b (local)"

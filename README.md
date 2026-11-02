@@ -1,6 +1,6 @@
 <div align="center">
 
-# VECTOR
+<img src="docs/logo.png" alt="VECTOR" height="80">
 
 **An open-source, JARVIS-style AI assistant that runs your laptop.**
 

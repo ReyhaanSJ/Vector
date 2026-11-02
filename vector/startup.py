@@ -17,6 +17,7 @@ def startup_folder() -> Path:
 
 
 SHORTCUT_NAME = "VECTOR.lnk"
+ICON = Path(__file__).parent / "assets" / "icon.ico"
 
 
 def app_launcher() -> tuple[str, str]:
@@ -43,7 +44,9 @@ def enable(app: bool = True, folder: Path | None = None) -> Path:
         result = powershell(
             "$s = (New-Object -ComObject WScript.Shell).CreateShortcut(" + ps_quote(str(path)) + ");"
             f"$s.TargetPath = {ps_quote(target)}; $s.Arguments = {ps_quote(arguments)};"
-            "$s.Description = 'VECTOR'; $s.Save()"
+            "$s.Description = 'VECTOR';"
+            + (f"$s.IconLocation = {ps_quote(str(ICON) + ',0')};" if ICON.exists() else "")
+            + "$s.Save()"
         )
         if result.returncode == 0 and path.exists():
             return path

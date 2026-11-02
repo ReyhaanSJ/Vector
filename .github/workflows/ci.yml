@@ -23,7 +23,17 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: pip install -e ".[dev]"
       - run: ruff check .
+      - run: pip install pillow
+        if: runner.os == 'Windows'
       - run: pytest -q
+        env:
+          VECTOR_SCREENSHOTS: ${{ github.workspace }}/screenshots
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows' && matrix.python == '3.13'
+        with:
+          name: summon-bar-screenshots
+          path: screenshots/
+          if-no-files-found: ignore
       - run: vector --selftest
         continue-on-error: true  # CI has no AI key, sound or screen; this just shows the report
 

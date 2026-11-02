@@ -19,6 +19,23 @@ class FakeAgent:
         return f"Handled '{text}', close allowed: {allowed}"
 
 
+def _screenshot(app, name):
+    """Saved for CI to upload, so the real Windows look can be checked."""
+    import os
+
+    folder = os.environ.get("VECTOR_SCREENSHOTS")
+    if not folder:
+        return
+    from PIL import ImageGrab
+
+    w = app.bar.win
+    w.update()
+    x, y = w.winfo_rootx(), w.winfo_rooty()
+    os.makedirs(folder, exist_ok=True)
+    ImageGrab.grab(bbox=(x - 24, y - 24, x + w.winfo_width() + 24, y + w.winfo_height() + 24)).save(
+        os.path.join(folder, name))
+
+
 def pump(app, seconds):
     end = time.time() + seconds
     while time.time() < end:
@@ -40,10 +57,14 @@ def test_summon_bar_round_trip():
         app.bar._submit()
         pump(app, 1.0)
         assert app.bar._confirm_cb is not None          # Allow / Deny card is showing
+        assert app.bar.confirm.winfo_ismapped()
+        app.root.update()
+        _screenshot(app, "summon-bar-confirm.png")
         assert app.bar.steps.winfo_children()           # the step was listed
         app.bar._answer(True)
         pump(app, 1.0)
         assert "close allowed: True" in app.bar.reply.cget("text")
+        _screenshot(app, "summon-bar-done.png")
         assert app.bar.busy is False
         app.bar.hide()
         pump(app, 0.2)

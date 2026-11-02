@@ -27,25 +27,52 @@ if sys.platform == "win32":
         except (AttributeError, ValueError):
             pass
 
-CYAN, DIM, YELLOW, RED, RESET = "\033[96m", "\033[2m", "\033[93m", "\033[91m", "\033[0m"
-if not sys.stdout.isatty():
-    CYAN = DIM = YELLOW = RED = RESET = ""
+# Colours from the VECTOR design (24-bit; Windows Terminal and modern consoles support them).
+CYAN = "\033[38;2;92;214;234m"
+DIM = "\033[38;2;139;152;165m"
+YELLOW = "\033[38;2;242;184;75m"
+RED = "\033[38;2;242;139;130m"
+BOLD = "\033[1m"
+RESET = "\033[0m"
+if not sys.stdout.isatty() or os.environ.get("NO_COLOR"):
+    CYAN = DIM = YELLOW = RED = BOLD = RESET = ""
 
-BANNER = rf"""{CYAN}
- __     _______ ____ _____ ___  ____
- \ \   / / ____/ ___|_   _/ _ \|  _ \
-  \ \ / /|  _|| |     | || | | | |_) |
-   \ V / | |__| |___  | || |_| |  _ <
-    \_/  |_____\____| |_| \___/|_| \_\   v{__version__}
-{RESET}{DIM}  your laptop, on command.  /help for commands{RESET}
+MARK = "\u25b3"   # the VECTOR triangle
+PROMPT = "\u203a"  # ›
+
+
+def banner(model: str = "") -> str:
+    details = " \u00b7 ".join(x for x in (model, "/help", "/exit") if x)
+    return (f"\n  {CYAN}{MARK}{RESET}  {BOLD}V E C T O R{RESET}  {DIM}{__version__}{RESET}\n"
+            f"     {DIM}{details}{RESET}\n")
+
+
+HELP = f"""
+  {BOLD}Commands{RESET}
+  {CYAN}/help{RESET}     this help
+  {CYAN}/skills{RESET}   everything VECTOR can do
+  {CYAN}/model{RESET}    which AI is answering
+  {CYAN}/reset{RESET}    start a fresh conversation (long-term memory is kept)
+  {CYAN}/exit{RESET}     quit
+
+  {DIM}Anything else is a request, e.g. "open vscode and my downloads folder".{RESET}
 """
 
-HELP = """Commands:
-  /help     show this help
-  /skills   list skills
-  /reset    forget this conversation (long-term memory is kept)
-  /exit     quit
-Anything else is a request, e.g. "open vscode and my downloads folder"."""
+
+def say(text: str) -> None:
+    """Print VECTOR's reply, wrapped neatly under the triangle mark."""
+    import shutil
+    import textwrap
+
+    width = max(40, min(shutil.get_terminal_size((100, 20)).columns, 110) - 4)
+    lines = []
+    for para in text.splitlines() or [""]:
+        lines.extend(textwrap.wrap(para, width) or [""])
+    print(f"\n{CYAN}{MARK}{RESET} " + "\n  ".join(lines) + "\n")
+
+
+def error(text: str) -> None:
+    print(f"  {RED}\u2715 {text}{RESET}")
 
 
 def _fmt_args(args: dict) -> str:
@@ -57,16 +84,20 @@ def _fmt_args(args: dict) -> str:
 
 
 def terminal_confirm(name: str, args: dict) -> bool:
-    print(f"{YELLOW}  ! VECTOR wants to run {name}({_fmt_args(args)}){RESET}")
+    print(f"  {YELLOW}! Needs your OK{RESET}  {name}({_fmt_args(args)})")
     try:
-        answer = input(f"{YELLOW}    Allow? [y/N] {RESET}").strip().lower()
+        answer = input(f"    {YELLOW}Allow?{RESET} {DIM}y = yes, Enter = no{RESET} {CYAN}{PROMPT}{RESET} ")
     except EOFError:
         return False
-    return answer in {"y", "yes"}
+    allowed = answer.strip().lower() in {"y", "yes"}
+    print(f"    {DIM}{'allowed' if allowed else 'skipped'}{RESET}")
+    return allowed
 
 
 def show_action(name: str, args: dict) -> None:
-    print(f"{DIM}  -> {name}({_fmt_args(args)}){RESET}")
+    from vector.ui import describe_step
+
+    print(f"  {DIM}\u00b7 {describe_step(name, args)}{RESET}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -96,9 +127,21 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def list_skills(vector) -> None:
-    for t in vector.registry.all():
-        flag = f" {YELLOW}[asks first]{RESET}" if t.dangerous else ""
-        print(f"  {CYAN}{t.name}{RESET}{flag}\n    {DIM}{t.description}{RESET}")
+    skills = vector.registry.all()
+    width = max(len(t.name) for t in skills) + 2
+    print(f"\n  {BOLD}{len(skills)} skills{RESET}  {DIM}{YELLOW}!{RESET}{DIM} = asks before running{RESET}\n")
+    for t in skills:
+        flag = f"{YELLOW}!{RESET}" if t.dangerous else " "
+        desc = t.description if len(t.description) < 80 else t.description[:77] + "..."
+        print(f"  {flag} {CYAN}{t.name:<{width}}{RESET}{DIM}{desc}{RESET}")
+    print()
+
+
+def model_name(vector) -> str:
+    from vector.config import describe_model
+
+    model = getattr(vector.brain, "model", None) or vector.config.resolved_model
+    return describe_model(vector.config.resolved_provider, model)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -174,9 +217,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.request:
         try:
-            print(vector.ask(" ".join(args.request)))
+            say(vector.ask(" ".join(args.request)))
         except BrainError as exc:
-            print(f"{RED}{exc}{RESET}")
+            error(str(exc))
             return 1
         return 0
 
@@ -203,12 +246,12 @@ def set_startup(mode: str) -> int:
 def text_loop(vector) -> int:
     from vector.brain import BrainError
 
-    print(BANNER)
+    print(banner(model_name(vector)))
     if not config_path().exists():
-        print(f"{DIM}  tip: run `vector --setup` to personalise VECTOR{RESET}\n")
+        print(f"  {DIM}tip: run `vector --setup` to personalise VECTOR{RESET}\n")
     while True:
         try:
-            text = input(f"{CYAN}you > {RESET}").strip()
+            text = input(f"{CYAN}{PROMPT}{RESET} ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
             return 0
@@ -223,19 +266,23 @@ def text_loop(vector) -> int:
         if cmd == "/skills":
             list_skills(vector)
             continue
+        if cmd == "/model":
+            print(f"  {DIM}{model_name(vector)}  (change it: vector --models){RESET}\n")
+            continue
         if cmd == "/reset":
             vector.reset()
-            print(f"{DIM}  conversation cleared{RESET}")
+            print(f"  {DIM}fresh conversation{RESET}\n")
             continue
         try:
             reply = vector.ask(text)
         except BrainError as exc:
-            print(f"{RED}  {exc}{RESET}")
+            error(str(exc))
+            print()
             continue
         except KeyboardInterrupt:
-            print(f"{DIM}  (interrupted){RESET}")
+            print(f"  {DIM}(stopped){RESET}\n")
             continue
-        print(f"{CYAN}VECTOR >{RESET} {reply}\n")
+        say(reply)
 
 
 def show_models() -> int:
@@ -353,8 +400,8 @@ def voice_loop(vector) -> int:
     from vector.voice import VoiceEngine, VoiceUnavailable
 
     wake = vector.config.wake_word
-    print(BANNER)
-    print(f"{DIM}  starting voice (the first time downloads ~200 MB of speech models)...{RESET}")
+    print(banner(model_name(vector)))
+    print(f"  {DIM}starting voice (the first time downloads ~200 MB of speech models)...{RESET}")
     try:
         engine = VoiceEngine(wake, vector.config.whisper_model, speak=vector.config.speak_replies)
         engine.start()
@@ -363,11 +410,11 @@ def voice_loop(vector) -> int:
         return 1
 
     vector.confirm = lambda name, args: _voice_confirm(engine, name, args)
-    print(f"{DIM}  listening... just say \"{wake.title()}, <your request>\". Ctrl+C to quit.{RESET}")
+    print(f"  {DIM}just say \u201c{wake.title()}, ...\u201d  \u00b7  Ctrl+C to quit{RESET}\n")
     engine.say("Vector online.")
     try:
         while True:
-            command = engine.listen_for_command(on_wake=lambda: print(f"{DIM}  (listening){RESET}"))
+            command = engine.listen_for_command(on_wake=lambda: print(f"  {CYAN}\u25cf{RESET} {DIM}listening{RESET}"))
             if command is None:
                 continue
             if not command:
@@ -375,7 +422,7 @@ def voice_loop(vector) -> int:
                 command = engine.listen_once()
                 if not command:
                     continue
-            print(f"{CYAN}you > {RESET}{command}")
+            print(f"{CYAN}{PROMPT}{RESET} {command}")
             if command.lower().strip(" .!") in {"goodbye", "shut down", "exit", "quit", "stop listening"}:
                 engine.say("Goodbye.")
                 return 0
@@ -383,7 +430,7 @@ def voice_loop(vector) -> int:
                 reply = vector.ask(command)
             except BrainError as exc:
                 reply = str(exc)
-            print(f"{CYAN}VECTOR >{RESET} {reply}\n")
+            say(reply)
             engine.say(reply)
     except VoiceUnavailable as exc:
         print(f"{RED}{exc}{RESET}")
@@ -396,10 +443,10 @@ def voice_loop(vector) -> int:
 
 
 def _voice_confirm(engine, name: str, args: dict) -> bool:
-    print(f"{YELLOW}  ! VECTOR wants to run {name}({_fmt_args(args)}) - say yes or no{RESET}")
+    print(f"  {YELLOW}! Needs your OK{RESET}  {name}({_fmt_args(args)})  {DIM}say yes or no{RESET}")
     engine.say(f"Can I run {name.replace('_', ' ')}? Say yes or no.")
     answer = engine.ask_yes_no(timeout=10)
-    print(f"{DIM}    {'allowed' if answer else 'denied'}{RESET}")
+    print(f"    {DIM}{'allowed' if answer else 'skipped'}{RESET}")
     return bool(answer)
 
 
