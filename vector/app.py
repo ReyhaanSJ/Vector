@@ -51,6 +51,10 @@ class VectorApp:
         self._speaking = False
         self._confirm_answer: Callable[[bool], None] | None = None
         self._esc = None
+        self._tucked = False  # bar hidden so VECTOR can see/click the screen
+        from vector.skills import screen as screen_skill
+
+        screen_skill.hide_overlay = self._hide_for_screen
 
         if agent is None:
             from vector.agent import Vector
@@ -148,6 +152,26 @@ class VectorApp:
             self._esc.stop()
             self._esc = None
 
+    def _hide_for_screen(self, hidden: bool) -> None:
+        """Called (on the brain thread) right before VECTOR looks at or clicks the screen:
+        get the bar out of the way first, so it isn't in the screenshot or under the mouse."""
+        if not hidden or self._tucked:
+            return
+        done = threading.Event()
+
+        def tuck():
+            if self.bar.visible():
+                self.bar.win.withdraw()
+                self._tucked = True
+            done.set()
+
+        self.ui(tuck)
+        done.wait(1.5)
+        if self._tucked:
+            import time
+
+            time.sleep(0.2)  # let Windows finish redrawing what was behind it
+
     def speak(self, text: str) -> None:
         """Say something out loud (voice thread). Esc cuts it off."""
         if self.engine is None or not text:
@@ -204,6 +228,10 @@ class VectorApp:
                 reply, error = f"Something went wrong: {exc}", True
             self._busy = False
             self.ui(self._set_active)
+            if self._tucked:  # bring the bar back to show the answer
+                self._tucked = False
+                if reply is not None:
+                    self.ui(self.bar.show, False)
             if reply is not None:
                 self.ui(self.bar.finish_request, reply, error)
                 if source == "voice":
@@ -228,7 +256,9 @@ class VectorApp:
         self.ui(self.bar.ask_confirm, name, args, answer)
         if self._current_source == "voice" and self.engine is not None:
             def by_voice():
-                self.speak(f"Can I run {name.replace('_', ' ')}? Say yes or no.")
+                ask = ("Can I look at and control your screen?" if name == "use_your_screen"
+                       else f"Can I run {name.replace('_', ' ')}?")
+                self.speak(f"{ask} Say yes or no.")
                 if decided.is_set():
                     return
                 heard = self.engine.ask_yes_no(timeout=10, cancel=decided)

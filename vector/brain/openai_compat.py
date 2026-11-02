@@ -14,7 +14,7 @@ import urllib.error
 import urllib.request
 
 from vector.brain.base import MAX_TOOL_ROUNDS, Brain, BrainError, ToolExecutor
-from vector.registry import Tool
+from vector.registry import Tool, ToolOutput
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1"
 MAX_HISTORY = 60
@@ -180,6 +180,7 @@ class OpenAICompatBrain(Brain):
                 self.messages.append(entry)
                 if not calls:
                     return (msg.get("content") or "Done.").strip()
+                pictures = []
                 for call in calls:
                     fn = call.get("function", {})
                     try:
@@ -187,8 +188,17 @@ class OpenAICompatBrain(Brain):
                     except ValueError:
                         args = {}
                     output, _ = execute(fn.get("name", ""), args if isinstance(args, dict) else {})
+                    if isinstance(output, ToolOutput):
+                        pictures.extend(output.image_b64())
+                        output = output.text + (" (the picture follows)" if output.images else "")
                     self.messages.append({"role": "tool", "tool_call_id": call.get("id", ""),
                                           "content": output})
+                if pictures:  # tool messages can't hold images here, so they follow as a user turn
+                    self.messages.append({"role": "user", "content": [
+                        {"type": "text", "text": "Picture(s) from the tool above:"},
+                        *({"type": "image_url", "image_url": {"url": f"data:{mt};base64,{data}"}}
+                          for mt, data in pictures),
+                    ]})
             return "(I stopped after too many steps.)"
         except BaseException:  # errors, Esc, Ctrl+C: drop the half-finished turn
             del self.messages[checkpoint:]

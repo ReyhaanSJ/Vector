@@ -13,7 +13,10 @@ from pathlib import Path
 
 from vector.brain import Brain
 from vector.config import Config
-from vector.registry import REGISTRY, Registry, load_builtin_skills, load_skill_dir
+from vector.registry import REGISTRY, Registry, ToolOutput, load_builtin_skills, load_skill_dir
+
+# Name used when asking for the once-per-request screen OK (the UIs show a friendly message for it).
+SCREEN_PERMISSION = "use_your_screen"
 
 # confirm(tool_name, arguments) -> True to allow
 Confirmer = Callable[[str, dict], bool]
@@ -35,6 +38,11 @@ be read aloud. Address the user as {user} occasionally, not every message.
 - Some tools need the user's approval; if they decline, accept it and don't retry the same thing.
 - Use `remember` when the user tells you a lasting preference or fact about themselves.
 - Never delete, overwrite or close things the user didn't ask about.
+- You can see the screen (look_at_screen) and control it (click, scroll, type_text, press_keys).
+  For on-screen tasks: look first, act, then look again to check it worked. Click coordinates
+  are pixels in the latest screenshot. Prefer direct skills (open_app, open_website) when they fit.
+- You have the internet: search_web finds pages and fetch_webpage reads them. Use them for
+  facts, news, prices or anything you don't know, and say where the information came from.
 
 Things you remember about {user}:
 {memory}
@@ -64,6 +72,7 @@ class Vector:
         self.on_action = on_action
         self.registry = registry or REGISTRY
         self._cancel = threading.Event()
+        self._screen_ok = False
         if registry is None:
             load_builtin_skills()
             user_dirs = [config.home / "skills", *map(Path, config.skill_dirs)]
@@ -101,6 +110,16 @@ class Vector:
             return f"Unknown tool '{name}'.", True
         if self.on_action:
             self.on_action(name, args)
+        if t.screen and not self._screen_ok:
+            mode = self.config.screen_access.lower()
+            if mode == "never":
+                return ("Screen access is turned off. The user can allow it with: "
+                        "vector --set screen_access=ask"), True
+            if mode != "always" and not self.confirm(SCREEN_PERMISSION, {"for": "this request"}):
+                if self._cancel.is_set():
+                    raise Cancelled()
+                return "The user didn't allow screen access for this request.", True
+            self._screen_ok = True
         if t.dangerous and self.config.confirm_dangerous and not self.confirm(name, args):
             if self._cancel.is_set():
                 raise Cancelled()
@@ -111,6 +130,8 @@ class Vector:
             return f"Bad arguments for {name}: {exc}", True
         except Exception as exc:
             return f"{name} failed: {exc}\n{traceback.format_exc(limit=2)}", True
+        if isinstance(result, ToolOutput):
+            return result, False
         if not isinstance(result, str):
             result = json.dumps(result, default=str)
         return result, False
@@ -119,6 +140,7 @@ class Vector:
         from vector.brain import Cancelled
 
         self._cancel.clear()
+        self._screen_ok = False  # the screen OK lasts for one request
         reply = self.brain.respond(text, self.system_prompt(), self.registry.all(), self.execute)
         if self._cancel.is_set():  # stopped while the AI was still answering
             raise Cancelled()

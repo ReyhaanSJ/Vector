@@ -33,6 +33,18 @@ VECTOR starts with Windows and waits in the background (icon by the clock).
 - When VECTOR asks permission, click **Allow** or **Deny**, press **Y** or **N**, or say yes or no.
 - Tray icon (right-click): turn listening on or off, open the bar, quit.
 
+### Screen and internet
+
+- **"What's on my screen?"**, **"Click Reply"**, **"Scroll down and summarise this page"**:
+  VECTOR takes screenshots and uses the mouse and keyboard. The first time in each request it
+  asks *"See and control your screen for this request?"* Esc stops it immediately.
+- **"Search the web for…"**, **"What's the latest on…"**, **"Read this page: <link>"**: VECTOR
+  searches and reads pages itself. Nothing opens unless you ask it to open something.
+- Seeing the screen needs an AI that understands pictures: **Claude** does. The small local
+  model doesn't (`ollama pull qwen2.5vl` gets a local one that does).
+- Screenshots go to your AI provider. To never allow it: `vector --set screen_access=never`.
+  To stop the question: `vector --set screen_access=always`.
+
 ### Changing settings later
 
 ```powershell

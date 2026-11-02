@@ -28,6 +28,11 @@ Windows · macOS · Linux · Claude or fully local (Ollama) · MIT licensed
   | Productivity | reminders, desktop notifications, clipboard read/write, long-term memory (remember/recall/forget) |
   | Control | type text, keyboard shortcuts, media play/pause/next |
 - **Start with your PC.** `vector --startup on` (Windows) launches it in voice mode at login.
+- **Sees and controls your screen.** "What's on my screen?", "click the blue Submit button",
+  "scroll down and read me the next email". It works from screenshots and uses the mouse and keyboard
+  like you would. It asks once per request first, and Esc stops it.
+- **Uses the internet.** It searches the web and reads pages itself (news, facts, prices, how-tos),
+  and downloads files when you ask.
 - **Safe by default.** Anything that changes your system (shell commands, deleting or moving files, typing keys, closing apps, power actions) **asks you first**.
 - **Remembers you.** Tell it *"remember my project folder is ~/code/robot"* and it'll know next time.
 - **Pick your brain.** Claude (best results) or a **free, private, offline** model through [Ollama](https://ollama.com).
@@ -221,7 +226,12 @@ Use `@tool(dangerous=True)` for anything that changes or deletes things. More in
 VECTOR can control your computer, so:
 - Keep `confirm_dangerous = true`. `--yes` turns confirmations off; only use it if you trust what you're asking.
 - Read through any third-party skill before putting it in your skills folder. It runs with your user's permissions.
-- With Claude, your requests and the results of the skills it runs (file names, file contents it reads) are sent to Anthropic's API. Use Ollama if you want everything local.
+- With Claude or OpenRouter, your requests and what the skills return (file names, file contents
+  it reads, **screenshots of your screen**) are sent to that AI provider. Close private things
+  before asking VECTOR to look at the screen, or use `vector --set screen_access=never`.
+  With Ollama everything stays on your computer.
+- Screen control asks once per request (`screen_access = "ask"`). Esc, or moving the mouse into a
+  screen corner, stops it immediately.
 
 ## Roadmap
 

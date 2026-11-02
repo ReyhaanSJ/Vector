@@ -300,3 +300,96 @@ def test_ctrl_c_mid_request_keeps_history_valid():
     with pytest.raises(KeyboardInterrupt):
         brain.respond("hi", "sys", [], v.execute)
     assert brain.messages == []
+
+
+def _screen_registry():
+    from vector.registry import ToolOutput
+
+    def look_at_screen():
+        """Look."""
+        calls.append("look")
+        return ToolOutput("Screenshot 10x10", [("image/jpeg", b"\xff\xd8jpeg")])
+
+    def click(x: int, y: int):
+        """Click."""
+        calls.append(("click", x, y))
+        return "clicked"
+
+    reg = make_registry()
+    reg.register(build_tool(look_at_screen, screen=True))
+    reg.register(build_tool(click, screen=True))
+    return reg
+
+
+def test_screen_ok_is_asked_once_per_request_and_images_reach_claude():
+    asked = []
+    fake = FakeClaude([
+        NS(stop_reason="tool_use", content=[tool_use("a", "look_at_screen", {}),
+                                            tool_use("b", "click", {"x": 1, "y": 2})]),
+        NS(stop_reason="end_turn", content=[text("done")]),
+        NS(stop_reason="tool_use", content=[tool_use("c", "look_at_screen", {})]),
+        NS(stop_reason="end_turn", content=[text("done again")]),
+    ])
+    calls.clear()
+    v = Vector(Config(), ClaudeBrain(client=fake), registry=_screen_registry(),
+               confirm=lambda n, a: asked.append(n) or True)
+    assert v.ask("click the button") == "done"
+    assert asked == ["use_your_screen"]                       # once for both screen actions
+    results = fake.requests[1]["messages"][-1]["content"]
+    image, words = results[0]["content"]
+    assert image["type"] == "image" and image["source"]["media_type"] == "image/jpeg"
+    assert words == {"type": "text", "text": "Screenshot 10x10"}
+    assert v.ask("look again") == "done again"
+    assert asked == ["use_your_screen", "use_your_screen"]   # a new request asks again
+
+
+def test_screen_access_never_and_always():
+    calls.clear()
+    reg = _screen_registry()
+    never = Vector(Config(screen_access="never"), ClaudeBrain(client=FakeClaude([])), registry=reg,
+                   confirm=lambda n, a: True)
+    out, err = never.execute("look_at_screen", {})
+    assert err and "turned off" in out and calls == []
+    always = Vector(Config(screen_access="always"), ClaudeBrain(client=FakeClaude([])), registry=reg,
+                    confirm=lambda n, a: pytest.fail("should not ask"))
+    out, err = always.execute("click", {"x": 3, "y": 4})
+    assert not err and calls == [("click", 3, 4)]
+
+
+def test_screenshots_reach_openrouter_and_ollama():
+    from vector.brain.openai_compat import OpenAICompatBrain
+
+    calls.clear()
+    sent = []
+    replies = [
+        {"choices": [{"message": {"content": "", "tool_calls": [
+            {"id": "c1", "function": {"name": "look_at_screen", "arguments": "{}"}}]}}]},
+        {"choices": [{"message": {"content": "I can see it"}}]},
+    ]
+
+    def post(payload):
+        sent.append(payload)
+        return replies.pop(0)
+
+    v = Vector(Config(screen_access="always"), OpenAICompatBrain("m:free", api_key="k", post=post),
+               registry=_screen_registry())
+    assert v.ask("what's on screen") == "I can see it"
+    tool_msg, picture_msg = sent[1]["messages"][-2:]
+    assert tool_msg["role"] == "tool" and "picture follows" in tool_msg["content"]
+    assert picture_msg["content"][1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+
+    ollama_sent = []
+    o_replies = [
+        {"message": {"content": "", "tool_calls": [{"function": {"name": "look_at_screen", "arguments": {}}}]}},
+        {"message": {"content": "ok"}},
+    ]
+
+    def o_post(payload):
+        ollama_sent.append(payload)
+        return o_replies.pop(0)
+
+    text_only = Vector(Config(screen_access="always"), OllamaBrain(model="llama3.2", post=o_post),
+                       registry=_screen_registry())
+    text_only.ask("look")
+    msg = ollama_sent[1]["messages"][-1]
+    assert "can't see pictures" in msg["content"] and "images" not in msg

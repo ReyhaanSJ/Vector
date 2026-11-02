@@ -36,6 +36,12 @@ jobs:
           name: summon-bar-screenshots
           path: screenshots/
           if-no-files-found: ignore
+      - name: Live internet check (search + read a page)
+        if: runner.os == 'Linux' && matrix.python == '3.13'
+        continue-on-error: true  # search sites sometimes rate-limit cloud machines
+        run: pytest -q -s tests/test_screen_web.py -k live
+        env:
+          VECTOR_LIVE_WEB_TEST: "1"
       - run: vector --selftest
         continue-on-error: true  # CI has no AI key, sound or screen; this just shows the report
 

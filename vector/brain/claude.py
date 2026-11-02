@@ -8,6 +8,17 @@ from vector.registry import Tool
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 
+def _tool_content(output):
+    """Text, or text plus images (screenshots) in the shape Claude's tool results take."""
+    from vector.registry import ToolOutput
+
+    if not isinstance(output, ToolOutput):
+        return output
+    blocks = [{"type": "image", "source": {"type": "base64", "media_type": mt, "data": data}}
+              for mt, data in output.image_b64()]
+    return blocks + [{"type": "text", "text": output.text}]
+
+
 class ClaudeBrain(Brain):
     name = "claude"
 
@@ -103,7 +114,7 @@ class ClaudeBrain(Brain):
                 results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
-                    "content": output,
+                    "content": _tool_content(output),
                     "is_error": is_error,
                 })
             self.messages.append({"role": "user", "content": results})

@@ -28,9 +28,13 @@ def test_schema_from_signature_and_docstring():
 def test_builtin_skills_load_and_risky_ones_are_flagged():
     load_builtin_skills()
     assert len(REGISTRY) >= 25
-    for name in ("run_shell_command", "delete_path", "move_or_rename", "write_text_file", "type_text"):
+    for name in ("run_shell_command", "delete_path", "move_or_rename", "write_text_file",
+                 "download_file"):
         assert REGISTRY.get(name).dangerous, name
-    assert not REGISTRY.get("open_app").dangerous
+    for name in ("look_at_screen", "click", "scroll", "drag", "type_text", "press_keys"):
+        assert REGISTRY.get(name).screen, name
+    for name in ("open_app", "search_web", "fetch_webpage"):
+        assert not REGISTRY.get(name).dangerous and not REGISTRY.get(name).screen, name
 
 
 def test_user_skill_dir(tmp_path):

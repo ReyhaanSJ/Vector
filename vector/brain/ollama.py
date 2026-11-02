@@ -11,7 +11,7 @@ import urllib.error
 import urllib.request
 
 from vector.brain.base import MAX_TOOL_ROUNDS, Brain, BrainError, ToolExecutor
-from vector.registry import Tool
+from vector.registry import Tool, ToolOutput
 
 MAX_HISTORY = 40  # local models have small context windows
 
@@ -24,6 +24,13 @@ class OllamaBrain(Brain):
         self.base_url = base_url.rstrip("/")
         self.messages: list[dict] = []
         self._post = post or self._http_post
+
+    @property
+    def can_see(self) -> bool:
+        """Rough check for vision models, which accept pictures."""
+        name = self.model.lower()
+        return any(tag in name for tag in ("vision", "-vl", "vl:", "llava", "gemma3", "qwen2.5vl",
+                                           "minicpm-v", "moondream", "llama4"))
 
     def reset(self) -> None:
         self.messages = []
@@ -85,7 +92,17 @@ class OllamaBrain(Brain):
                         except ValueError:
                             args = {}
                     output, _ = execute(fn.get("name", ""), args)
-                    self.messages.append({"role": "tool", "content": output, "tool_name": fn.get("name", "")})
+                    message = {"role": "tool", "tool_name": fn.get("name", "")}
+                    if isinstance(output, ToolOutput):
+                        if output.images and self.can_see:
+                            message["images"] = [data for _, data in output.image_b64()]
+                        elif output.images:
+                            output = ToolOutput(output.text + " (This local AI model can't see "
+                                                "pictures. For screen tasks use Claude, or a vision "
+                                                "model such as qwen2.5vl or gemma3.)")
+                        output = output.text
+                    message["content"] = output
+                    self.messages.append(message)
             return "(I stopped after too many steps.)"
         except BaseException:  # errors, Esc, Ctrl+C: drop the half-finished turn
             del self.messages[checkpoint:]

@@ -162,8 +162,9 @@ def open_website(url: str) -> str:
 
 
 @tool
-def web_search(query: str, engine: str = "google") -> str:
-    """Search the web in the browser (Google, YouTube, GitHub, Maps, Wikipedia, DuckDuckGo).
+def search_in_browser(query: str, engine: str = "google") -> str:
+    """Open a search in the user's browser (Google, YouTube, GitHub, Maps, Wikipedia, DuckDuckGo),
+    for when the user wants to see the results themselves. To read results yourself, use search_web.
 
     query: What to search for.
     engine: One of google, youtube, duckduckgo, github, maps, wikipedia.

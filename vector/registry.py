@@ -27,11 +27,24 @@ import sys
 import types
 import typing
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 _JSON_TYPES = {str: "string", int: "integer", float: "number", bool: "boolean"}
+
+
+@dataclass
+class ToolOutput:
+    """What a skill returns when it has more than text, e.g. a screenshot for the AI to look at."""
+
+    text: str
+    images: list[tuple[str, bytes]] = field(default_factory=list)  # (media type, data)
+
+    def image_b64(self) -> list[tuple[str, str]]:
+        import base64
+
+        return [(mt, base64.b64encode(data).decode()) for mt, data in self.images]
 
 
 @dataclass
@@ -41,6 +54,7 @@ class Tool:
     func: Callable[..., Any]
     parameters: dict
     dangerous: bool = False
+    screen: bool = False  # sees or controls the screen: needs the once-per-request screen OK
 
     def schema(self) -> dict:
         """Tool definition in the shape the Claude Messages API expects."""
@@ -84,7 +98,8 @@ def _parse_docstring(doc: str, param_names: set[str]) -> tuple[str, dict[str, st
     return " ".join(summary_lines), params
 
 
-def build_tool(func: Callable, name: str | None = None, dangerous: bool = False) -> Tool:
+def build_tool(func: Callable, name: str | None = None, dangerous: bool = False,
+               screen: bool = False) -> Tool:
     signature = inspect.signature(func)
     description, param_docs = _parse_docstring(func.__doc__ or "", set(signature.parameters))
     hints = typing.get_type_hints(func)
@@ -107,6 +122,7 @@ def build_tool(func: Callable, name: str | None = None, dangerous: bool = False)
         func=func,
         parameters=schema,
         dangerous=dangerous,
+        screen=screen,
     )
 
 
@@ -134,11 +150,14 @@ class Registry:
 REGISTRY = Registry()
 
 
-def tool(func: Callable | None = None, *, name: str | None = None, dangerous: bool = False):
-    """Decorator that registers a function as a VECTOR skill."""
+def tool(func: Callable | None = None, *, name: str | None = None, dangerous: bool = False,
+         screen: bool = False):
+    """Decorator that registers a function as a VECTOR skill.
+    dangerous=True: asks before every run. screen=True: sees/controls the screen, which
+    needs the user's OK once per request (see the screen_access setting)."""
 
     def wrap(f: Callable) -> Callable:
-        REGISTRY.register(build_tool(f, name=name, dangerous=dangerous))
+        REGISTRY.register(build_tool(f, name=name, dangerous=dangerous, screen=screen))
         return f
 
     return wrap(func) if func is not None else wrap

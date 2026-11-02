@@ -83,8 +83,14 @@ def _fmt_args(args: dict) -> str:
     return ", ".join(parts)
 
 
+def _describe_ask(name: str, args: dict) -> str:
+    if name == "use_your_screen":
+        return "see and control your screen for this request"
+    return f"{name}({_fmt_args(args)})"
+
+
 def terminal_confirm(name: str, args: dict) -> bool:
-    print(f"  {YELLOW}! Needs your OK{RESET}  {name}({_fmt_args(args)})")
+    print(f"  {YELLOW}! Needs your OK{RESET}  {_describe_ask(name, args)}")
     try:
         answer = input(f"    {YELLOW}Allow?{RESET} {DIM}y = yes, Enter = no{RESET} {CYAN}{PROMPT}{RESET} ")
     except EOFError:
@@ -443,7 +449,7 @@ def voice_loop(vector) -> int:
 
 
 def _voice_confirm(engine, name: str, args: dict) -> bool:
-    print(f"  {YELLOW}! Needs your OK{RESET}  {name}({_fmt_args(args)})  {DIM}say yes or no{RESET}")
+    print(f"  {YELLOW}! Needs your OK{RESET}  {_describe_ask(name, args)}  {DIM}say yes or no{RESET}")
     engine.say(f"Can I run {name.replace('_', ' ')}? Say yes or no.")
     answer = engine.ask_yes_no(timeout=10)
     print(f"    {DIM}{'allowed' if answer else 'skipped'}{RESET}")

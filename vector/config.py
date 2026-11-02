@@ -42,8 +42,15 @@ effort = "low"
 ollama_url = "http://localhost:11434"
 
 # Ask before running actions that change things (shell commands, deleting/moving
-# files, writing files, typing keys). Strongly recommended to keep this on.
+# files, writing files). Strongly recommended to keep this on.
 confirm_dangerous = true
+
+# Seeing and controlling the screen (screenshots, mouse, keyboard):
+#   "ask"    ask once per request (default)
+#   "always" never ask
+#   "never"  VECTOR can't see or control the screen
+# Screenshots are sent to your AI provider (Anthropic or OpenRouter, not with local Ollama).
+screen_access = "ask"
 
 # Voice: say the wake word, then your request. No button needed.
 wake_word = "vector"
@@ -79,6 +86,7 @@ class Config:
     effort: str = "low"
     ollama_url: str = "http://localhost:11434"
     confirm_dangerous: bool = True
+    screen_access: str = "ask"
     wake_word: str = "vector"
     speak_replies: bool = True
     listen_on_start: bool = True

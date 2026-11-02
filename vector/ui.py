@@ -406,8 +406,12 @@ class SummonBar:
 
     def ask_confirm(self, name: str, args: dict, callback: Callable[[bool], None]) -> None:
         self._confirm_cb = callback
-        details = ", ".join(f"{k}={v!r}" for k, v in args.items())
-        self.confirm_call.configure(text=f"{name}({details[:240]})")
+        if name == "use_your_screen":
+            text = "See and control your screen (mouse and keyboard) for this request"
+        else:
+            details = ", ".join(f"{k}={v!r}" for k, v in args.items())
+            text = f"{name}({details[:240]})"
+        self.confirm_call.configure(text=text)
         self.confirm.pack(fill="x", pady=(8, 10), padx=8)
         self._fit_confirm()
         self.show(focus=True)

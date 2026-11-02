@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from vector.registry import tool
+from vector.skills.screen import _prepare
 
 _MISSING = "Keyboard control needs pyautogui: pip install 'vector-assistant[control]'"
 
@@ -16,7 +17,7 @@ def _gui():
         return None
 
 
-@tool(dangerous=True)
+@tool(screen=True)
 def type_text(text: str) -> str:
     """Type text into whatever window is focused, as if on the keyboard.
 
@@ -25,11 +26,12 @@ def type_text(text: str) -> str:
     gui = _gui()
     if not gui:
         return _MISSING
+    _prepare()
     gui.write(text, interval=0.01)
     return "Typed it."
 
 
-@tool(dangerous=True)
+@tool(screen=True)
 def press_keys(keys: list[str]) -> str:
     """Press a keyboard shortcut, e.g. ["ctrl", "s"] to save or ["alt", "tab"] to switch windows.
 
@@ -38,6 +40,7 @@ def press_keys(keys: list[str]) -> str:
     gui = _gui()
     if not gui:
         return _MISSING
+    _prepare()
     gui.hotkey(*[k.lower() for k in keys])
     return f"Pressed {'+'.join(keys)}."
 
