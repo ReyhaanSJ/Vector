@@ -31,6 +31,8 @@ VECTOR starts with Windows and waits in the background (icon by the clock).
 - **Say "Vector, ..."** to talk to it. No button needed. "Vector" alone works too: it answers
   "Yes?" and listens.
 - When VECTOR asks permission, click **Allow** or **Deny**, press **Y** or **N**, or say yes or no.
+- **Read aloud** (small speaker button under the mic): VECTOR reads its replies out loud, even
+  typed ones. Turning it on also reads the reply already on screen. VECTOR remembers the choice.
 - Tray icon (right-click): turn listening on or off, open the bar, quit.
 
 ### Screen and internet

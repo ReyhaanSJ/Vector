@@ -55,6 +55,8 @@ screen_access = "ask"
 # Voice: say the wake word, then your request. No button needed.
 wake_word = "vector"
 speak_replies = true
+# Read typed replies aloud too (the small speaker button under the mic in the summon bar).
+read_aloud = false
 # Start listening for the wake word as soon as the VECTOR app opens.
 listen_on_start = true
 # Offline speech-to-text model: tiny.en (fastest), base.en, small.en (most accurate).
@@ -89,6 +91,7 @@ class Config:
     screen_access: str = "ask"
     wake_word: str = "vector"
     speak_replies: bool = True
+    read_aloud: bool = False
     listen_on_start: bool = True
     whisper_model: str = "base.en"
     hotkey: str = "ctrl+shift+space"

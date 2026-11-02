@@ -46,7 +46,12 @@ class VectorApp:
 
         hotkey_label = "+".join(p.capitalize() for p in config.hotkey.split("+"))
         self.bar = SummonBar(self.root, self.submit_typed, self.toggle_voice, hotkey_label,
-                             on_escape=self.stop_all)
+                             on_escape=self.stop_all, on_toggle_aloud=self.toggle_aloud)
+        from vector.voice import Speaker
+
+        self._reader = Speaker()  # reads typed replies aloud when voice mode is off
+        self.read_aloud = config.read_aloud
+        self.bar.set_aloud(self.read_aloud)
         self._busy = False
         self._speaking = False
         self._confirm_answer: Callable[[bool], None] | None = None
@@ -131,8 +136,7 @@ class VectorApp:
         self.agent.cancel()
         if self._confirm_answer is not None:
             self._confirm_answer(False)
-        if self.engine is not None:
-            self.engine.stop_speaking()
+        self.stop_speaking()
         if self.bar.busy:
             self.bar.finish_request("Stopped.")
         self.bar.hide()
@@ -173,16 +177,47 @@ class VectorApp:
             time.sleep(0.2)  # let Windows finish redrawing what was behind it
 
     def speak(self, text: str) -> None:
-        """Say something out loud (voice thread). Esc cuts it off."""
-        if self.engine is None or not text:
+        """Say something out loud (blocks; call from a background thread). Esc cuts it off."""
+        if not text:
             return
         self._speaking = True
         self.ui(self._set_active)
         try:
-            self.engine.say(text)
+            if self.engine is not None:
+                self.engine.say(text)     # mutes the mic while talking
+            else:
+                self._reader.say(text)
+        except Exception:
+            log.exception("speaking failed")
         finally:
             self._speaking = False
             self.ui(self._set_active)
+
+    def speak_in_background(self, text: str) -> None:
+        threading.Thread(target=self.speak, args=(text,), name="vector-read-aloud", daemon=True).start()
+
+    def stop_speaking(self) -> None:
+        self._reader.stop()
+        if self.engine is not None:
+            self.engine.stop_speaking()
+
+    def toggle_aloud(self) -> None:
+        """The small speaker button: read replies aloud on/off. Turning it on also reads the
+        reply already on screen, for when you clicked too late."""
+        self.read_aloud = not self.read_aloud
+        self.bar.set_aloud(self.read_aloud)
+        try:
+            from vector.config import set_config_value
+
+            set_config_value("read_aloud", "true" if self.read_aloud else "false")
+        except OSError:
+            log.exception("couldn't save read_aloud")
+        if self.read_aloud:
+            reply = self.bar.showing_reply()
+            if reply and not self._speaking:
+                self.speak_in_background(reply)
+        else:
+            self.stop_speaking()
 
     def submit_typed(self, text: str) -> None:
         self.bar.start_request(text, typed=True)
@@ -236,6 +271,8 @@ class VectorApp:
                 self.ui(self.bar.finish_request, reply, error)
                 if source == "voice":
                     self.ui(self.bar.hide_later, 9000)
+                elif self.read_aloud:  # typed request with read-aloud on
+                    self.speak_in_background(reply)
             self.ui(self._show_model)  # auto:free may have picked a different model
             if waiter:
                 done, box = waiter

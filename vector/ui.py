@@ -95,15 +95,56 @@ class Pill:
         return self
 
 
+class Tooltip:
+    """A small hint that appears when the mouse rests on a widget."""
+
+    def __init__(self, widget, text: Callable[[], str]):
+        self.widget, self.text, self.tip, self.job = widget, text, None, None
+        widget.bind("<Enter>", self._schedule, add="+")
+        widget.bind("<Leave>", self._hide, add="+")
+        widget.bind("<ButtonPress>", self._hide, add="+")
+
+    def _schedule(self, _event=None):
+        self._hide()
+        self.job = self.widget.after(450, self._show)
+
+    def _show(self):
+        import tkinter as tk
+
+        self.job = None
+        w = self.widget
+        self.tip = tk.Toplevel(w)
+        self.tip.overrideredirect(True)
+        self.tip.attributes("-topmost", True)
+        tk.Label(self.tip, text=self.text(), bg=PANEL, fg=TEXT, padx=8, pady=4,
+                 font=("Segoe UI", 9) if sys.platform == "win32" else ("Helvetica", 9),
+                 highlightthickness=1, highlightbackground=BORDER).pack()
+        self.tip.update_idletasks()
+        x = w.winfo_rootx() + w.winfo_width() - self.tip.winfo_reqwidth()
+        y = w.winfo_rooty() + w.winfo_height() + 6
+        self.tip.geometry(f"+{x}+{y}")
+
+    def _hide(self, _event=None):
+        if self.job:
+            self.widget.after_cancel(self.job)
+            self.job = None
+        if self.tip:
+            self.tip.destroy()
+            self.tip = None
+
+
 class SummonBar:
     """The pop-up bar. Every method must run on the Tk thread."""
 
     def __init__(self, root, on_submit: Callable[[str], None], on_toggle_voice: Callable[[], None],
-                 hotkey_label: str, on_escape: Callable[[], None] | None = None):
+                 hotkey_label: str, on_escape: Callable[[], None] | None = None,
+                 on_toggle_aloud: Callable[[], None] | None = None):
         import tkinter as tk
 
         self.tk = tk
         self.on_escape = on_escape
+        self.on_toggle_aloud = on_toggle_aloud or (lambda: None)
+        self.aloud_on = False
         self.root = root
         self.on_submit = on_submit
         self.on_toggle_voice = on_toggle_voice
@@ -152,12 +193,25 @@ class SummonBar:
                                     font=self.f_input, anchor="w")
         self.placeholder.place(x=1, rely=0.5, anchor="w")
         self.placeholder.bind("<Button-1>", lambda e: self.entry.focus_set())
-        self.mic = tk.Canvas(header, width=44, height=44, bg=BG, highlightthickness=0,
+        # Right-hand column: the mic (voice) button, with the small read-aloud button under it.
+        controls = tk.Frame(header, bg=BG)
+        controls.pack(side="left", padx=(12, 0))
+        self.mic = tk.Canvas(controls, width=44, height=44, bg=BG, highlightthickness=0,
                              cursor="hand2", takefocus=1)
-        self.mic.pack(side="left", padx=(12, 0))
+        self.mic.pack()
         for seq in ("<Button-1>", "<Return>", "<space>"):
             self.mic.bind(seq, lambda e: self.on_toggle_voice())
         self._draw_mic()
+        self.aloud_btn = tk.Canvas(controls, width=44, height=22, bg=BG, highlightthickness=0,
+                                   cursor="hand2", takefocus=1)
+        self.aloud_btn.pack(pady=(5, 0))
+        for seq in ("<Button-1>", "<Return>", "<space>"):
+            self.aloud_btn.bind(seq, lambda e: self.on_toggle_aloud())
+        Tooltip(self.aloud_btn, lambda: "Reading replies aloud. Click to stop." if self.aloud_on
+                else "Read replies aloud (also reads the reply on screen now)")
+        Tooltip(self.mic, lambda: "Listening for \u201cVector\u201d. Click to stop." if self.voice_on
+                else "Turn on voice: just say \u201cVector, ...\u201d")
+        self._draw_aloud()
 
         tk.Frame(outer, bg=LINE, height=1).pack(fill="x")
 
@@ -246,6 +300,32 @@ class SummonBar:
         c.create_line(22, 31, 22, 35, fill=stroke, width=2, capstyle="round")
         if not on:
             c.create_line(13, 33, 31, 11, fill=stroke, width=2, capstyle="round")
+
+    def _draw_aloud(self) -> None:
+        """The small read-aloud button: a speaker, with sound waves when on."""
+        c = self.aloud_btn
+        c.delete("all")
+        on = self.aloud_on
+        fill = ACCENT_BG if on else CHIP
+        stroke = ACCENT if on else MUTED
+        round_rect(c, 1, 1, 43, 21, 7, fill=fill, outline=ACCENT if on else fill)
+        c.create_polygon(13, 9, 16, 9, 20, 5, 20, 17, 16, 13, 13, 13, fill=stroke, outline=stroke)
+        if on:
+            c.create_arc(17, 6, 25, 16, start=-50, extent=100, style="arc", outline=stroke, width=1.6)
+            c.create_arc(18, 3, 30, 19, start=-50, extent=100, style="arc", outline=stroke, width=1.6)
+        else:
+            c.create_line(24, 8, 30, 14, fill=stroke, width=1.6, capstyle="round")
+            c.create_line(30, 8, 24, 14, fill=stroke, width=1.6, capstyle="round")
+
+    def set_aloud(self, on: bool) -> None:
+        self.aloud_on = on
+        self._draw_aloud()
+
+    def showing_reply(self) -> str:
+        """The reply on screen right now ("" if none)."""
+        if self.visible() and not self.busy and self.reply_box.winfo_ismapped():
+            return self.reply.cget("text")
+        return ""
 
     def _round_corners(self) -> None:
         """Windows 11: native rounded corners, soft shadow and a thin border colour."""

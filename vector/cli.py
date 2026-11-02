@@ -52,6 +52,7 @@ HELP = f"""
   {CYAN}/help{RESET}     this help
   {CYAN}/skills{RESET}   everything VECTOR can do
   {CYAN}/model{RESET}    which AI is answering
+  {CYAN}/aloud{RESET}    read replies out loud on/off (Ctrl+C stops reading)
   {CYAN}/reset{RESET}    start a fresh conversation (long-term memory is kept)
   {CYAN}/exit{RESET}     quit
 
@@ -251,10 +252,14 @@ def set_startup(mode: str) -> int:
 
 def text_loop(vector) -> int:
     from vector.brain import BrainError
+    from vector.voice import Speaker
 
     print(banner(model_name(vector)))
     if not config_path().exists():
         print(f"  {DIM}tip: run `vector --setup` to personalise VECTOR{RESET}\n")
+    reader = Speaker()
+    aloud = vector.config.read_aloud
+    last_reply = ""
     while True:
         try:
             text = input(f"{CYAN}{PROMPT}{RESET} ").strip()
@@ -271,6 +276,15 @@ def text_loop(vector) -> int:
             continue
         if cmd == "/skills":
             list_skills(vector)
+            continue
+        if cmd == "/aloud":
+            aloud = not aloud
+            from vector.config import set_config_value
+
+            set_config_value("read_aloud", "true" if aloud else "false")
+            print(f"  {DIM}reading replies aloud: {'on' if aloud else 'off'}{RESET}\n")
+            if aloud and last_reply:
+                _read(reader, last_reply)
             continue
         if cmd == "/model":
             print(f"  {DIM}{model_name(vector)}  (change it: vector --models){RESET}\n")
@@ -289,6 +303,16 @@ def text_loop(vector) -> int:
             print(f"  {DIM}(stopped){RESET}\n")
             continue
         say(reply)
+        last_reply = reply
+        if aloud:
+            _read(reader, reply)
+
+
+def _read(reader, text: str) -> None:
+    try:
+        reader.say(text)
+    except KeyboardInterrupt:
+        print(f"  {DIM}(stopped reading){RESET}\n")
 
 
 def show_models() -> int:

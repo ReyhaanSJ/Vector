@@ -1,11 +1,14 @@
 """Drives the real summon bar with a fake brain. Needs a screen, so it runs on Windows CI."""
 
+import os
 import sys
 import time
 
 import pytest
 
-pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="needs a desktop session")
+pytestmark = pytest.mark.skipif(
+    sys.platform != "win32" and not os.environ.get("VECTOR_UI_TESTS"),
+    reason="needs a desktop session (Windows CI, or set VECTOR_UI_TESTS=1 with a display)")
 
 
 class FakeAgent:
@@ -101,6 +104,43 @@ def test_escape_stops_everything():
         assert app.bar.busy is False and not app.bar.visible()
         assert app.bar.reply.cget("text") == "Stopped."
         assert app._esc is None                   # Esc is given back to other apps when idle
+    finally:
+        app.quit()
+        pump(app, 0.2)
+
+
+def test_read_aloud_button(monkeypatch, tmp_path):
+    from vector.app import VectorApp
+    from vector.config import Config
+
+    monkeypatch.setenv("VECTOR_CONFIG", str(tmp_path / "config.toml"))
+    app = VectorApp(Config(), agent=FakeAgent(), enable_voice=False, enable_tray=False,
+                    enable_hotkey=False)
+    spoken = []
+    app._reader.say = lambda text: spoken.append(text)
+    app._reader.stop = lambda: spoken.append("<stop>")
+    try:
+        app.bar.show()
+        app.bar.entry.insert(0, "hello")
+        app.bar._submit()
+        pump(app, 0.8)
+        app.bar._answer(True)
+        pump(app, 0.8)
+        assert spoken == []                                   # read-aloud is off by default
+        app.bar.aloud_btn.event_generate("<Button-1>")       # clicked too late: reads it now
+        pump(app, 0.5)
+        assert spoken and spoken[0].startswith("Handled 'hello'")
+        assert app.read_aloud and "read_aloud = true" in (tmp_path / "config.toml").read_text()
+        spoken.clear()
+        app.bar.entry.insert(0, "again")                     # clicked before: next reply is read
+        app.bar._submit()
+        pump(app, 0.8)
+        app.bar._answer(False)
+        pump(app, 0.8)
+        assert spoken and spoken[-1].startswith("Handled 'again'")
+        app.bar.aloud_btn.event_generate("<Button-1>")       # off again: stops reading
+        pump(app, 0.3)
+        assert not app.read_aloud and spoken[-1] == "<stop>"
     finally:
         app.quit()
         pump(app, 0.2)
