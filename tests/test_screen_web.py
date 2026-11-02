@@ -52,9 +52,53 @@ import pytest  # noqa: E402
 
 @pytest.mark.skipif(not os.environ.get("VECTOR_LIVE_WEB_TEST"), reason="needs the real internet")
 def test_live_search_and_read():
+    for name, engine in web._search_engines("python programming language official site"):
+        try:
+            found = engine(5)
+            print(f"{name}: {len(found)} results", [r["url"] for r in found[:3]])
+        except Exception as exc:  # report every engine, even ones that fail
+            print(f"{name}: error {exc}")
     results = web.search_web("python programming language official site", 5)
     print(results)
     assert "python.org" in results.lower()
     page = web.fetch_webpage("https://www.python.org", 2000)
     print(page[:300])
     assert "python" in page.lower()
+
+
+def test_bing_and_lite_parsing():
+    import base64
+
+    wrapped = "https://www.bing.com/ck/a?!&&p=abc&u=a1" + base64.urlsafe_b64encode(
+        b"https://www.python.org/").decode().rstrip("=") + "&ntb=1"
+    bing = f"""<ol id="b_results">
+      <li class="b_algo"><h2><a href="{wrapped}">Welcome to <strong>Python</strong>.org</a></h2>
+        <div class="b_caption"><p class="b_lineclamp2">The official home of Python.</p></div></li>
+      <li class="b_ad"><a href="https://www.bing.com/aclick?ad">Ad</a></li>
+      <li class="b_algo"><h2><a href="https://docs.python.org/3/">Python docs</a></h2><p>Docs.</p></li>
+    </ol>"""
+    assert web.parse_bing(bing) == [
+        {"title": "Welcome to Python.org", "url": "https://www.python.org/",
+         "snippet": "The official home of Python."},
+        {"title": "Python docs", "url": "https://docs.python.org/3/", "snippet": "Docs."},
+    ]
+    lite = """<table><tr><td><a rel="nofollow" href="https://www.python.org/" class='result-link'>Python</a></td></tr>
+    <tr><td class='result-snippet'>Official site.</td></tr></table>"""
+    assert web.parse_lite(lite) == [
+        {"title": "Python", "url": "https://www.python.org/", "snippet": "Official site."}]
+
+
+def test_search_falls_back_to_the_next_engine(monkeypatch):
+    calls = []
+
+    def fake_get(url, data=None, timeout=20):
+        calls.append(url)
+        if "html.duckduckgo" in url:
+            return b"<html>anomaly - are you a robot?</html>", "text/html", url
+        return (b'<li class="b_algo"><h2><a href="https://python.org/">Python</a></h2><p>Hi</p></li>',
+                "text/html", url)
+
+    monkeypatch.setattr(web, "_get", fake_get)
+    out = web.search_web("python")
+    assert out.startswith("Results from Bing") and "https://python.org/" in out
+    assert len(calls) == 2

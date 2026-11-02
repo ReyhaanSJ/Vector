@@ -135,14 +135,24 @@ class _Results(HTMLParser):
 
 
 def clean_result_url(href: str) -> str:
-    """DuckDuckGo wraps links as //duckduckgo.com/l/?uddg=<real url>; unwrap them."""
+    """Unwrap search-engine redirect links to the real address:
+    DuckDuckGo //duckduckgo.com/l/?uddg=<url>, Bing bing.com/ck/a?...&u=a1<base64 url>."""
+    import base64
+
     if href.startswith("//"):
         href = "https:" + href
     parsed = urllib.parse.urlparse(href)
-    if "duckduckgo.com" in parsed.netloc and parsed.path.startswith("/l/"):
-        real = urllib.parse.parse_qs(parsed.query).get("uddg")
-        if real:
-            return real[0]
+    query = urllib.parse.parse_qs(parsed.query)
+    if "duckduckgo.com" in parsed.netloc and parsed.path.startswith("/l/") and query.get("uddg"):
+        return query["uddg"][0]
+    if "bing.com" in parsed.netloc and parsed.path.startswith("/ck/") and query.get("u"):
+        code = query["u"][0]
+        if code.startswith("a1"):
+            code = code[2:]
+            try:
+                return base64.urlsafe_b64decode(code + "=" * (-len(code) % 4)).decode()
+            except (ValueError, UnicodeDecodeError):
+                pass
     return href
 
 
@@ -157,6 +167,122 @@ def parse_results(html: str, limit: int = 8) -> list[dict]:
     return out[:limit]
 
 
+class _Bing(HTMLParser):
+    """Results from Bing's normal results page (li.b_algo blocks)."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.results: list[dict] = []
+        self._in_result = 0
+        self._in_h2 = False
+        self._field = None
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == "li" and "b_algo" in (a.get("class") or ""):
+            self._in_result = 1
+            self.results.append({"title": "", "url": "", "snippet": ""})
+            return
+        if not self._in_result:
+            return
+        if tag == "li":
+            self._in_result += 1
+        if tag == "h2":
+            self._in_h2 = True
+        elif tag == "a" and self._in_h2 and not self.results[-1]["url"]:
+            self.results[-1]["url"] = clean_result_url(a.get("href") or "")
+            self._field = "title"
+        elif tag == "p" and not self.results[-1]["snippet"]:
+            self._field = "snippet"
+
+    def handle_endtag(self, tag):
+        if not self._in_result:
+            return
+        if tag == "h2":
+            self._in_h2 = False
+        if tag in ("a", "p"):
+            self._field = None
+        if tag == "li":
+            self._in_result -= 1
+
+    def handle_data(self, data):
+        if self._field and self.results:
+            self.results[-1][self._field] += data
+
+
+class _Lite(HTMLParser):
+    """Results from DuckDuckGo Lite (a.result-link + td.result-snippet)."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.results: list[dict] = []
+        self._field = None
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        cls = a.get("class") or ""
+        if tag == "a" and "result-link" in cls:
+            self.results.append({"title": "", "url": clean_result_url(a.get("href") or ""),
+                                 "snippet": ""})
+            self._field = "title"
+        elif tag == "td" and "result-snippet" in cls and self.results:
+            self._field = "snippet"
+
+    def handle_endtag(self, tag):
+        if tag in ("a", "td"):
+            self._field = None
+
+    def handle_data(self, data):
+        if self._field and self.results:
+            self.results[-1][self._field] += data
+
+
+def _tidy(results: list[dict], limit: int) -> list[dict]:
+    out, seen = [], set()
+    for r in results:
+        r = {k: " ".join(v.split()) for k, v in r.items()}
+        url = r["url"]
+        if not url.startswith("http") or url in seen or "duckduckgo.com/y.js" in url:
+            continue
+        if "bing.com/aclick" in url or not r["title"]:
+            continue
+        seen.add(url)
+        out.append(r)
+    return out[:limit]
+
+
+def parse_bing(html: str, limit: int = 8) -> list[dict]:
+    parser = _Bing()
+    parser.feed(html)
+    return _tidy(parser.results, limit)
+
+
+def parse_lite(html: str, limit: int = 8) -> list[dict]:
+    parser = _Lite()
+    parser.feed(html)
+    return _tidy(parser.results, limit)
+
+
+def _search_engines(query: str):
+    """(name, function returning results) in the order to try them."""
+    form = urllib.parse.urlencode({"q": query, "kl": "wt-wt"}).encode()
+
+    def ddg(limit):
+        body, ctype, _ = _get("https://html.duckduckgo.com/html/", data=form)
+        return parse_results(_decode(body, ctype), limit)
+
+    def bing(limit):
+        url = "https://www.bing.com/search?" + urllib.parse.urlencode({"q": query, "setlang": "en"})
+        body, ctype, _ = _get(url)
+        return parse_bing(_decode(body, ctype), limit)
+
+    def lite(limit):
+        body, ctype, _ = _get("https://lite.duckduckgo.com/lite/", data=form)
+        return parse_lite(_decode(body, ctype), limit)
+
+    return [("DuckDuckGo", ddg), ("Bing", bing), ("DuckDuckGo Lite", lite)]
+
+
 @tool
 def search_web(query: str, max_results: int = 8) -> str:
     """Search the internet and get the results (titles, links, snippets) to read. Follow up with
@@ -165,17 +291,20 @@ def search_web(query: str, max_results: int = 8) -> str:
     query: What to search for.
     max_results: How many results to return.
     """
-    data = urllib.parse.urlencode({"q": query, "kl": "wt-wt"}).encode()
-    try:
-        body, ctype, _ = _get("https://html.duckduckgo.com/html/", data=data)
-    except (urllib.error.URLError, OSError) as exc:
-        return f"Search failed ({getattr(exc, 'reason', exc)}). Check the internet connection."
-    results = parse_results(_decode(body, ctype), max_results)
-    if not results:
-        return ("No results came back (the search site may be limiting requests). "
-                "Try again in a moment, or fetch_webpage a site you know.")
-    return "\n\n".join(f"{i}. {r['title']}\n   {r['url']}\n   {r['snippet']}"
-                       for i, r in enumerate(results, 1))
+    problems = []
+    for name, engine in _search_engines(query):
+        try:
+            results = engine(max_results)
+        except (urllib.error.URLError, OSError) as exc:
+            problems.append(f"{name}: {getattr(exc, 'reason', exc)}")
+            continue
+        if results:
+            lines = [f"{i}. {r['title']}\n   {r['url']}\n   {r['snippet']}"
+                     for i, r in enumerate(results, 1)]
+            return f"Results from {name}:\n\n" + "\n\n".join(lines)
+        problems.append(f"{name}: no results")
+    return ("Searching didn't work right now (" + "; ".join(problems) + "). Check the internet "
+            "connection, try again in a moment, or fetch_webpage a site you know.")
 
 
 @tool(dangerous=True)
