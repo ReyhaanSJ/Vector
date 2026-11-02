@@ -71,6 +71,8 @@ jobs:
           cmd /c "$env:LOCALAPPDATA\Microsoft\WindowsApps\vector.cmd" --version; if ($LASTEXITCODE) { exit 1 }
           if (-not (Test-Path "$([Environment]::GetFolderPath('Desktop'))\VECTOR.lnk")) { throw "no desktop shortcut" }
           if (-not (Test-Path "$env:LOCALAPPDATA\Programs\VECTOR\.venv\Scripts\vector-app.exe")) { throw "no vector-app" }
+          & "$env:LOCALAPPDATA\Programs\VECTOR\.venv\Scripts\python.exe" -c "import ctypes,sys; p=r'$env:LOCALAPPDATA\Programs\VECTOR\.venv\Scripts\vector-app.exe'; n=ctypes.windll.shell32.ExtractIconExW(p,-1,None,None,0); print('icons in vector-app.exe:', n); sys.exit(0 if n > 0 else 1)"
+          if ($LASTEXITCODE) { throw "vector-app.exe has no icon" }
           if (-not (Test-Path "$([Environment]::GetFolderPath('Startup'))\VECTOR.lnk")) { throw "no login shortcut" }
           & "$env:LOCALAPPDATA\Programs\VECTOR\.venv\Scripts\python.exe" -c "import pystray, PIL, sounddevice, vosk, faster_whisper; print('app + voice packages OK')"
           if ($LASTEXITCODE) { exit 1 }

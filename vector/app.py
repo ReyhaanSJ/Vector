@@ -501,6 +501,17 @@ def _setup_logging(config: Config) -> None:
     sys.excepthook = excepthook
 
 
+def _windows_identity() -> None:
+    """Tell Windows this is "VECTOR" (not Python), so it gets its own taskbar/notification identity."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("VECTOR.Assistant")
+        except Exception:
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
     """Start the app. `--background` (used at login) starts without popping up the bar."""
     from vector.instance import InstanceServer, signal_running
@@ -511,6 +522,7 @@ def main(argv: list[str] | None = None) -> int:
     if signal_running("voice" if background else "show"):
         return 0  # already running: it just popped up its bar
     _setup_logging(config)
+    _windows_identity()
     try:
         app = VectorApp(config)
     except Exception as exc:

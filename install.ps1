@@ -138,6 +138,7 @@ if ($voiceOk -and $env:VECTOR_INSTALL_SKIP_MODEL -ne "1") {
     if ($LASTEXITCODE -ne 0) { Say "Couldn't download them now; VECTOR will try again when you first use voice." Yellow }
 }
 & $Py -m vector --setup | Out-Null
+& $Py -m vector.winicon | Out-Null   # give vector.exe / vector-app.exe the VECTOR icon
 
 # ---------------------------------------------------------------- 4. AI brain
 Step 4 "Choosing VECTOR's AI brain"
