@@ -162,7 +162,7 @@ def test_openrouter_needs_key():
     assert brain.messages == []
 
 
-def test_openrouter_auto_picks_and_recovers():
+def test_openrouter_auto_picks_and_recovers(monkeypatch):
     from vector.brain.openai_compat import OpenAICompatBrain, list_free_tool_models, pick_free_model
 
     catalog = {"data": [
@@ -189,6 +189,8 @@ def test_openrouter_auto_picks_and_recovers():
 
     brain = OpenAICompatBrain(api_key="k", fetch=fetch)
     brain._post = lambda p: brain_post(p)
+    import vector.brain.openai_compat as oc
+    monkeypatch.setattr(oc.time, "sleep", lambda s: None)
 
     def brain_post(p):  # route through the real error handling
         try:
@@ -212,3 +214,32 @@ def test_openrouter_fixed_model_is_not_switched():
     v = make_vector(OpenAICompatBrain("me/my-model:free", api_key="k", post=post))
     with pytest.raises(BrainError, match="doesn't have"):
         v.ask("hi")
+
+
+def test_openrouter_busy_model_retries_then_switches(monkeypatch):
+    import vector.brain.openai_compat as oc
+    from vector.brain.openai_compat import OpenAICompatBrain, _ModelBusy
+
+    monkeypatch.setattr(oc.time, "sleep", lambda s: None)
+    catalog = {"data": [{"id": m, "supported_parameters": ["tools"]}
+                        for m in ("google/gemma-4-31b-it:free", "x/other:free")]}
+    sent = []
+
+    def post(payload):
+        sent.append(payload["model"])
+        if payload["model"] == "google/gemma-4-31b-it:free":
+            raise _ModelBusy("busy")
+        return {"choices": [{"message": {"content": "ok"}}]}
+
+    v = make_vector(OpenAICompatBrain(api_key="k", post=post, fetch=lambda u: catalog))
+    assert v.ask("hi") == "ok"
+    assert sent == ["google/gemma-4-31b-it:free", "google/gemma-4-31b-it:free", "x/other:free"]
+
+
+def test_openrouter_429_messages():
+    from vector.brain.openai_compat import describe_429
+
+    msg, daily = describe_429('{"error":{"message":"Rate limit exceeded: free-models-per-day"}}', "m")
+    assert daily and "midnight UTC" in msg
+    msg, daily = describe_429('{"error":{"message":"m is temporarily rate-limited upstream"}}', "m")
+    assert not daily and "busy" in msg

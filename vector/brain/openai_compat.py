@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 
@@ -56,6 +57,21 @@ class _ModelGone(BrainError):
     pass
 
 
+class _ModelBusy(BrainError):
+    pass
+
+
+def describe_429(detail: str, model: str) -> tuple[str, bool]:
+    """Turn OpenRouter's 429 error into (message, is_daily_limit)."""
+    text = detail.lower()
+    if "per-day" in text or "per day" in text or "daily" in text:
+        return ("You've used today's free OpenRouter requests. They reset at midnight UTC. "
+                "Until then, use the local AI: vector --set provider=ollama", True)
+    return (f"The free model '{model}' is busy right now (lots of people share it). "
+            "Try again in a minute, or let VECTOR switch models when one is busy: "
+            "vector --set model=auto:free", False)
+
+
 class OpenAICompatBrain(Brain):
     name = "openrouter"
 
@@ -100,32 +116,43 @@ class OpenAICompatBrain(Brain):
                 raise _ModelGone(f"OpenRouter doesn't have the model '{self.model}' (any more). "
                                  "See what's available with: vector --models") from exc
             if exc.code == 429:
-                raise BrainError("Free OpenRouter limit reached for now. Wait a bit, or switch to the "
-                                 "local AI: vector --set provider=ollama") from exc
+                message, daily = describe_429(detail, self.model)
+                raise (BrainError if daily else _ModelBusy)(message) from exc
             raise BrainError(f"OpenRouter error {exc.code}: {detail}") from exc
         except urllib.error.URLError as exc:
             raise BrainError("Couldn't reach OpenRouter. Check your internet connection.") from exc
 
-    def _choose_model(self, refresh: bool = False) -> None:
-        if self.auto and (refresh or self.model == AUTO_FREE):
-            available = list_free_tool_models(self.base_url, self._fetch)
-            if refresh and self.model in available:
-                available.remove(self.model)
-            choice = pick_free_model(available)
-            if not choice:
-                raise BrainError("OpenRouter has no free models with tool support right now. "
-                                 "Try later, or use the local AI: vector --set provider=ollama")
-            self.model = choice
+    def _choose_model(self, avoid: set[str] | None = None) -> None:
+        if not self.auto or (self.model != AUTO_FREE and not avoid):
+            return
+        available = [m for m in list_free_tool_models(self.base_url, self._fetch)
+                     if m not in (avoid or set())]
+        choice = pick_free_model(available)
+        if not choice:
+            raise BrainError("No free OpenRouter model with tool support is available right now. "
+                             "Try again later, or use the local AI: vector --set provider=ollama")
+        self.model = choice
 
     def respond(self, user_text: str, system: str, tools: list[Tool], execute: ToolExecutor) -> str:
         self._choose_model()
-        try:
-            return self._respond(user_text, system, tools, execute)
-        except _ModelGone:
-            if not self.auto:
-                raise
-            self._choose_model(refresh=True)  # the free model vanished: pick another, try once more
-            return self._respond(user_text, system, tools, execute)
+        tried: set[str] = set()
+        retried_same = False
+        while True:
+            try:
+                return self._respond(user_text, system, tools, execute)
+            except _ModelBusy:
+                if not retried_same:          # busy models often free up within seconds
+                    retried_same = True
+                    time.sleep(2)
+                    continue
+                if not self.auto or len(tried) >= 3:
+                    raise
+            except _ModelGone:
+                if not self.auto or len(tried) >= 3:
+                    raise
+            tried.add(self.model)             # auto mode: move on to the next free model
+            retried_same = False
+            self._choose_model(avoid=tried)
 
     def _respond(self, user_text: str, system: str, tools: list[Tool], execute: ToolExecutor) -> str:
         checkpoint = len(self.messages)
