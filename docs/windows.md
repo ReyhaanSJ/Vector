@@ -31,6 +31,9 @@ VECTOR starts with Windows and waits in the background (icon by the clock).
 - **Say "Vector, ..."** to talk to it. No button needed. "Vector" alone works too: it answers
   "Yes?" and listens.
 - When VECTOR asks permission, click **Allow** or **Deny**, press **Y** or **N**, or say yes or no.
+- **Focus mode:** while the bar is open, the screen behind it dims and clicks outside the bar
+  do nothing. Esc (or Ctrl+Shift+Space) closes it. It lifts while VECTOR uses the screen, and
+  quiet pop-ups (notices, saying "Vector") don't dim. Off: `vector --set focus_mode=false`.
 - **Read aloud** (small speaker button under the mic): VECTOR reads its replies out loud, even
   typed ones. Turning it on also reads the reply already on screen. VECTOR remembers the choice.
 - Tray icon (right-click): turn listening on or off, open the bar, quit.

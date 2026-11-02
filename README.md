@@ -115,6 +115,9 @@ After setup, VECTOR runs quietly in the background. Look for its icon by the clo
   Listening for the wake word happens offline on your computer, and so does turning your
   speech into text.
 - Risky actions show an **Allow / Deny** card, and you can also just say "yes" or "no".
+- **Focus mode:** while you have the bar open, the rest of the screen dims and can't be clicked
+  until you press Esc (or the shortcut again). It lifts while VECTOR works on the screen.
+  Turn it off with `vector --set focus_mode=false`.
 - **Read aloud:** the small speaker button under the mic reads replies out loud even when you
   type. Click it before asking, or after a reply is already showing to hear it then. Click
   again to turn it off. (Terminal: `/aloud`.)

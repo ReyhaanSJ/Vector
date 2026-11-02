@@ -46,7 +46,8 @@ class VectorApp:
 
         hotkey_label = "+".join(p.capitalize() for p in config.hotkey.split("+"))
         self.bar = SummonBar(self.root, self.submit_typed, self.toggle_voice, hotkey_label,
-                             on_escape=self.stop_all, on_toggle_aloud=self.toggle_aloud)
+                             on_escape=self.stop_all, on_toggle_aloud=self.toggle_aloud,
+                             focus_mode=config.focus_mode)
         from vector.voice import Speaker
 
         self._reader = Speaker()  # reads typed replies aloud when voice mode is off
@@ -165,7 +166,7 @@ class VectorApp:
 
         def tuck():
             if self.bar.visible():
-                self.bar.win.withdraw()
+                self.bar.tuck()  # also lifts focus mode's dimming so VECTOR can see the desktop
                 self._tucked = True
             done.set()
 

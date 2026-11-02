@@ -64,6 +64,9 @@ whisper_model = "base.en"
 
 # Keyboard shortcut that pops up the summon bar from anywhere.
 hotkey = "ctrl+shift+space"
+# Focus mode: while you have the summon bar open, the rest of the screen dims and can't be
+# clicked until you press Esc (or the shortcut again).
+focus_mode = true
 
 # Check GitHub once a day for a new VECTOR version and offer it from the tray icon.
 check_updates = true
@@ -95,6 +98,7 @@ class Config:
     listen_on_start: bool = True
     whisper_model: str = "base.en"
     hotkey: str = "ctrl+shift+space"
+    focus_mode: bool = True
     check_updates: bool = True
     skill_dirs: list[str] = field(default_factory=list)
 

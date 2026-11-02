@@ -138,10 +138,12 @@ class SummonBar:
 
     def __init__(self, root, on_submit: Callable[[str], None], on_toggle_voice: Callable[[], None],
                  hotkey_label: str, on_escape: Callable[[], None] | None = None,
-                 on_toggle_aloud: Callable[[], None] | None = None):
+                 on_toggle_aloud: Callable[[], None] | None = None, focus_mode: bool = True):
         import tkinter as tk
 
         self.tk = tk
+        self.focus_mode = focus_mode
+        self.overlay = None
         self.on_escape = on_escape
         self.on_toggle_aloud = on_toggle_aloud or (lambda: None)
         self.aloud_on = False
@@ -358,8 +360,56 @@ class SummonBar:
         c.create_window(18, 16, window=inner, anchor="nw", width=w - 36)
 
     # -- showing and hiding ------------------------------------------------------------------
+    # -- focus mode: dim and block the rest of the screen while the bar is open -------------
+    def _virtual_screen(self) -> tuple[int, int, int, int]:
+        """x, y, width, height covering every monitor."""
+        if sys.platform == "win32":
+            try:
+                import ctypes
+
+                m = ctypes.windll.user32.GetSystemMetrics
+                return m(76), m(77), m(78), m(79)  # SM_X/Y/CX/CYVIRTUALSCREEN
+            except Exception:
+                pass
+        return 0, 0, self.win.winfo_screenwidth(), self.win.winfo_screenheight()
+
+    def _show_overlay(self) -> None:
+        tk = self.tk
+        if self.overlay is None:
+            ov = self.overlay = tk.Toplevel(self.root)
+            ov.withdraw()
+            ov.overrideredirect(True)
+            ov.attributes("-topmost", True)
+            ov.configure(bg="#03060A", cursor="arrow")
+            try:
+                ov.attributes("-alpha", 0.45)
+            except tk.TclError:
+                pass
+            for seq in ("<Button-1>", "<Button-2>", "<Button-3>", "<Double-Button-1>"):
+                ov.bind(seq, lambda e: self._bring_back())
+            ov.bind("<Escape>", lambda e: (self.on_escape or self.hide)())
+        x, y, w, h = self._virtual_screen()
+        self.overlay.geometry(f"{w}x{h}+{x}+{y}")
+        self.overlay.deiconify()
+        self.overlay.lift()
+
+    def hide_overlay(self) -> None:
+        if self.overlay is not None:
+            self.overlay.withdraw()
+
+    def overlay_visible(self) -> bool:
+        return self.overlay is not None and bool(self.overlay.winfo_viewable())
+
+    def _bring_back(self) -> None:
+        """A click outside the bar: keep the bar in front and focused instead."""
+        self.win.lift()
+        self.win.focus_force()
+        self.entry.focus_set()
+
     def show(self, focus: bool = True) -> None:
         self._cancel_auto_hide()
+        if focus and self.focus_mode:
+            self._show_overlay()
         win = self.win
         win.update_idletasks()
         x = (win.winfo_screenwidth() - WIDTH) // 2
@@ -383,6 +433,12 @@ class SummonBar:
         if self._confirm_cb is not None:
             self._answer(False)
         self._cancel_auto_hide()
+        self.hide_overlay()
+        self.win.withdraw()
+
+    def tuck(self) -> None:
+        """Get out of the way while VECTOR looks at or clicks the screen."""
+        self.hide_overlay()
         self.win.withdraw()
 
     def visible(self) -> bool:
@@ -398,6 +454,10 @@ class SummonBar:
             self._hide_job = None
 
     def _maybe_hide(self) -> None:
+        if self.overlay_visible():  # focus mode: stay until Esc
+            if self.win.focus_get() is None:
+                self._bring_back()
+            return
         if self.busy or self._confirm_cb is not None:
             return
         if self.win.focus_get() is None and self.visible():

@@ -144,3 +144,47 @@ def test_read_aloud_button(monkeypatch, tmp_path):
     finally:
         app.quit()
         pump(app, 0.2)
+
+
+def test_focus_mode_blocks_the_screen_until_esc():
+    from vector.app import VectorApp
+    from vector.config import Config
+
+    app = VectorApp(Config(), agent=FakeAgent(), enable_voice=False, enable_tray=False,
+                    enable_hotkey=False)
+    try:
+        app.bar.show()
+        pump(app, 0.4)
+        assert app.bar.overlay_visible() and app.bar.visible()
+        app.bar.overlay.event_generate("<Button-1>", x=5, y=5)   # click outside the bar
+        pump(app, 0.4)
+        assert app.bar.visible() and app.bar.overlay_visible()  # nothing else is reachable
+        app.bar.tuck()                                           # VECTOR using the screen
+        pump(app, 0.2)
+        assert not app.bar.overlay_visible()
+        app.bar.show()
+        pump(app, 0.3)
+        app.bar.win.event_generate("<Escape>")
+        pump(app, 0.4)
+        assert not app.bar.visible() and not app.bar.overlay_visible()
+        app.bar.show(focus=False)                                # notices / "Vector" don't dim
+        pump(app, 0.3)
+        assert app.bar.visible() and not app.bar.overlay_visible()
+    finally:
+        app.quit()
+        pump(app, 0.2)
+
+
+def test_focus_mode_can_be_turned_off():
+    from vector.app import VectorApp
+    from vector.config import Config
+
+    app = VectorApp(Config(focus_mode=False), agent=FakeAgent(), enable_voice=False,
+                    enable_tray=False, enable_hotkey=False)
+    try:
+        app.bar.show()
+        pump(app, 0.3)
+        assert app.bar.visible() and not app.bar.overlay_visible()
+    finally:
+        app.quit()
+        pump(app, 0.2)
