@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.13"]
+        include:
+          # macOS minutes cost 10x on private repos, so test just one version there.
+          - os: macos-latest
+            python: "3.13"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: pip install pillow
+        if: runner.os == 'Windows'
+      - run: pytest -q
+        env:
+          VECTOR_SCREENSHOTS: ${{ github.workspace }}/screenshots
+          VECTOR_LIVE_UPDATE_TEST: ${{ runner.os == 'Linux' && '1' || '' }}
+          GITHUB_TOKEN: ${{ github.token }}
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows' && matrix.python == '3.13'
+        with:
+          name: summon-bar-screenshots
+          path: screenshots/
+          if-no-files-found: ignore
+      - name: Live internet check (search + read a page)
+        if: runner.os == 'Linux' && matrix.python == '3.13'
+        continue-on-error: true  # search sites sometimes rate-limit cloud machines
+        run: pytest -q -s tests/test_screen_web.py -k live
+        env:
+          VECTOR_LIVE_WEB_TEST: "1"
+      - run: vector --selftest
+        continue-on-error: true  # CI has no AI key, sound or screen; this just shows the report
+
+  # Runs the real Windows installer end to end, then the uninstaller.
+  windows-installer:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ai: [none, ollama]
+    env:
+      VECTOR_INSTALL_YES: "1"
+      VECTOR_INSTALL_AI: ${{ matrix.ai }}
+      VECTOR_INSTALL_SKIP_MODEL: "1"
+      VECTOR_UNINSTALL_YES: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Double-click equivalent of "Install VECTOR.bat"
+        shell: cmd
+        run: echo.| "Install VECTOR.bat"
+      - name: VECTOR runs from the installed copy
+        shell: pwsh
+        run: |
+          $exe = "$env:LOCALAPPDATA\Programs\VECTOR\.venv\Scripts\vector.exe"
+          & $exe --version; if ($LASTEXITCODE) { exit 1 }
+          & $exe --list-skills | Select-Object -First 4
+          cmd /c "$env:LOCALAPPDATA\Microsoft\WindowsApps\vector.cmd" --version; if ($LASTEXITCODE) { exit 1 }
+          if (-not (Test-Path "$([Environment]::GetFolderPath('Desktop'))\VECTOR.lnk")) { throw "no desktop shortcut" }
+          if (-not (Test-Path "$env:LOCALAPPDATA\Programs\VECTOR\.venv\Scripts\vector-app.exe")) { throw "no vector-app" }
+          & "$env:LOCALAPPDATA\Programs\VECTOR\.venv\Scripts\python.exe" -c "import ctypes,sys; p=r'$env:LOCALAPPDATA\Programs\VECTOR\.venv\Scripts\vector-app.exe'; n=ctypes.windll.shell32.ExtractIconExW(p,-1,None,None,0); print('icons in vector-app.exe:', n); sys.exit(0 if n > 0 else 1)"
+          if ($LASTEXITCODE) { throw "vector-app.exe has no icon" }
+          if (-not (Test-Path "$([Environment]::GetFolderPath('Startup'))\VECTOR.lnk")) { throw "no login shortcut" }
+          if (-not (Test-Path "$([Environment]::GetFolderPath('Programs'))\VECTOR.lnk")) { throw "no Start Menu entry" }
+          if (Test-Path "$([Environment]::GetFolderPath('Programs'))\VECTOR") { throw "old Start Menu folder still there" }
+          $app = Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\VECTOR"
+          if ($app.DisplayName -ne "VECTOR" -or -not $app.UninstallString) { throw "not listed in Settings > Apps" }
+          "Settings > Apps: $($app.DisplayName) $($app.DisplayVersion)"
+          & "$env:LOCALAPPDATA\Programs\VECTOR\.venv\Scripts\python.exe" -c "import pystray, PIL, sounddevice, vosk, faster_whisper; print('app + voice packages OK')"
+          if ($LASTEXITCODE) { exit 1 }
+          Get-Content "$env:USERPROFILE\.vector\config.toml" | Select-String "^(provider|model) ="
+          if ("${{ matrix.ai }}" -eq "ollama") {
+            if (-not (Select-String -Path "$env:USERPROFILE\.vector\config.toml" -Pattern '^provider = "ollama"')) { throw "ollama not configured" }
+          }
+      - name: Update over the top keeps settings
+        shell: cmd
+        env:
+          VECTOR_INSTALL_KEEP_SETTINGS: "1"
+          VECTOR_INSTALL_AI: claude
+        run: |
+          echo.| "Install VECTOR.bat" > second-run.log
+          type second-run.log
+          findstr /C:"Already installed: uv" second-run.log || exit /b 1
+          findstr /C:"Already installed: Python" second-run.log || exit /b 1
+          findstr /R /C:"^provider = " "%USERPROFILE%\.vector\config.toml"
+          findstr /C:"provider = \"anthropic\"" "%USERPROFILE%\.vector\config.toml" && exit /b 1
+          exit /b 0
+      - name: Uninstall
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\Programs\VECTOR\src\scripts\uninstall-windows.ps1"
+          if (Test-Path "$env:LOCALAPPDATA\Programs\VECTOR") { throw "app folder still there" }
+          if (Test-Path "$env:LOCALAPPDATA\Microsoft\WindowsApps\vector.cmd") { throw "vector command still there" }
+          if (Test-Path "$([Environment]::GetFolderPath('Startup'))\VECTOR.lnk") { throw "login shortcut still there" }
+          if (Test-Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\VECTOR") { throw "still in Settings > Apps" }
+          if (-not (Test-Path "$env:USERPROFILE\.vector\config.toml")) { throw "user data should be kept by default" }
+
+  # Windows' own voice speaks "Vector. Open notepad." and VECTOR must understand it.
+  speech-e2e:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e ".[voice,dev]"
+      - run: pytest -v tests/test_speech_e2e.py
+        env:
+          VECTOR_SPEECH_E2E: "1"
