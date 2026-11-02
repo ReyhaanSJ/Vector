@@ -95,3 +95,25 @@ def test_download_release_rejects_unsafe_zip(tmp_path, monkeypatch):
     monkeypatch.setattr(updater, "_request", lambda url, accept=None: _FakeResponse(data))
     with pytest.raises(UpdateError):
         updater.download_release(_releases("v0.2.0")[0], tmp_path / "dl")
+
+
+def test_download_asks_github_for_the_normal_format(tmp_path, monkeypatch):
+    """Regression: asking the zipball endpoint for octet-stream made GitHub answer 415."""
+    seen = {}
+
+    def fake_request(url, accept="application/vnd.github+json"):
+        seen["accept"] = accept
+        return _FakeResponse(_zip({"x/install.ps1": ""}))
+
+    monkeypatch.setattr(updater, "_request", fake_request)
+    updater.download_release(_releases("v0.2.3")[0], tmp_path)
+    assert seen["accept"] == "application/vnd.github+json"
+
+
+@pytest.mark.skipif(not __import__("os").environ.get("VECTOR_LIVE_UPDATE_TEST"),
+                    reason="needs network + GitHub access (CI sets VECTOR_LIVE_UPDATE_TEST)")
+def test_real_release_downloads(tmp_path):
+    latest = updater.latest_release()
+    assert latest is not None
+    folder = updater.download_release(latest, tmp_path)
+    assert (folder / "install.ps1").exists() and (folder / "Install VECTOR.bat").exists()

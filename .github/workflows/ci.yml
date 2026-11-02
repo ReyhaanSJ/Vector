@@ -28,6 +28,8 @@ jobs:
       - run: pytest -q
         env:
           VECTOR_SCREENSHOTS: ${{ github.workspace }}/screenshots
+          VECTOR_LIVE_UPDATE_TEST: ${{ runner.os == 'Linux' && '1' || '' }}
+          GITHUB_TOKEN: ${{ github.token }}
       - uses: actions/upload-artifact@v4
         if: runner.os == 'Windows' && matrix.python == '3.13'
         with:

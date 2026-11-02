@@ -144,7 +144,7 @@ def download_release(release: Release, dest: Path) -> Path:
     """Download and unpack a release; returns the folder holding install.ps1."""
     dest.mkdir(parents=True, exist_ok=True)
     zip_path = dest / f"vector-{release.version}.zip"
-    with _request(f"{API}/zipball/{release.tag}", accept="application/octet-stream") as resp:
+    with _request(f"{API}/zipball/{release.tag}") as resp:  # GitHub redirects to the ZIP
         zip_path.write_bytes(resp.read())
     with zipfile.ZipFile(zip_path) as archive:
         for member in archive.namelist():
