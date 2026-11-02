@@ -87,6 +87,6 @@ class OllamaBrain(Brain):
                     output, _ = execute(fn.get("name", ""), args)
                     self.messages.append({"role": "tool", "content": output, "tool_name": fn.get("name", "")})
             return "(I stopped after too many steps.)"
-        except BrainError:
+        except BaseException:  # errors, Esc, Ctrl+C: drop the half-finished turn
             del self.messages[checkpoint:]
             raise

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from vector.brain.base import Brain, BrainError, ToolExecutor
+from vector.brain.base import Brain, BrainError, Cancelled, ToolExecutor
 
 if TYPE_CHECKING:
     from vector.config import Config
 
-__all__ = ["Brain", "BrainError", "ToolExecutor", "create_brain"]
+__all__ = ["Brain", "BrainError", "Cancelled", "ToolExecutor", "create_brain"]
 
 
 def create_brain(config: Config) -> Brain:

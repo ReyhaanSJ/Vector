@@ -13,6 +13,7 @@ def test_parse_hotkey():
     assert parse_hotkey("ctrl+shift+space") == (0x2 | 0x4, 0x20)
     assert parse_hotkey("Ctrl + Alt + V") == (0x2 | 0x1, ord("V"))
     assert parse_hotkey("win+f9") == (0x8, 0x78)
+    assert parse_hotkey("esc", allow_bare=True) == (0, 0x1B)
     for bad in ("space", "ctrl+banana", "hyper+v", ""):
         with pytest.raises(HotkeyError):
             parse_hotkey(bad)
@@ -104,3 +105,18 @@ def test_speech_models_present(tmp_path, monkeypatch):
     (snap / "model.bin").write_bytes(b"x")
     assert speech_models_present("base.en")
     assert not speech_models_present("small.en")
+
+
+def test_speaker_stop_silences_engine():
+    from vector.voice import Speaker
+
+    class Engine:
+        stopped = False
+
+        def stop(self):
+            Engine.stopped = True
+
+    sp = Speaker()
+    sp._engine = Engine()
+    sp.stop()
+    assert Engine.stopped

@@ -15,6 +15,13 @@ class BrainError(RuntimeError):
     """A problem talking to the AI provider, phrased for the user."""
 
 
+class Cancelled(BrainError):
+    """The user stopped the request (Esc, or Ctrl+C in the terminal)."""
+
+    def __init__(self, message: str = "Stopped."):
+        super().__init__(message)
+
+
 class Brain(ABC):
     """Holds one conversation and runs the think -> act -> observe loop."""
 

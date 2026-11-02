@@ -28,7 +28,7 @@ class HotkeyError(ValueError):
     pass
 
 
-def parse_hotkey(text: str) -> tuple[int, int]:
+def parse_hotkey(text: str, allow_bare: bool = False) -> tuple[int, int]:
     """'ctrl+shift+space' -> (modifier flags, virtual-key code)."""
     parts = [p.strip().lower() for p in text.replace(" ", "").split("+") if p.strip()]
     if not parts:
@@ -41,7 +41,7 @@ def parse_hotkey(text: str) -> tuple[int, int]:
         flags |= MODIFIERS[m]
     if key not in KEYS:
         raise HotkeyError(f"Unknown key '{key}'")
-    if not flags:
+    if not flags and not allow_bare:
         raise HotkeyError("A shortcut needs at least one of ctrl, shift, alt or win")
     return flags, KEYS[key]
 
@@ -58,8 +58,9 @@ def to_pynput(text: str) -> str:
 class GlobalHotkey:
     """Calls `callback` (from a background thread) whenever the shortcut is pressed."""
 
-    def __init__(self, combo: str, callback: Callable[[], None]):
+    def __init__(self, combo: str, callback: Callable[[], None], allow_bare: bool = False):
         self.combo = combo
+        self.allow_bare = allow_bare
         self.callback = callback
         self.error: str | None = None
         self._thread: threading.Thread | None = None
@@ -70,7 +71,7 @@ class GlobalHotkey:
     def start(self) -> bool:
         """Start listening. False (with .error set) if the shortcut can't be used."""
         try:
-            parse_hotkey(self.combo)
+            parse_hotkey(self.combo, self.allow_bare)
         except HotkeyError as exc:
             self.error = str(exc)
             return False
@@ -96,7 +97,7 @@ class GlobalHotkey:
         user32 = ctypes.windll.user32
         kernel32 = ctypes.windll.kernel32
         self._thread_id = kernel32.GetCurrentThreadId()
-        flags, vk = parse_hotkey(self.combo)
+        flags, vk = parse_hotkey(self.combo, self.allow_bare)
         if not user32.RegisterHotKey(None, 1, flags | MOD_NOREPEAT, vk):
             self.error = (f"{self.combo} is already used by another app. "
                           "Pick another with: vector --set hotkey=ctrl+alt+v")

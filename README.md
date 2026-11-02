@@ -110,6 +110,9 @@ After setup, VECTOR runs quietly in the background. Look for its icon by the clo
   Listening for the wake word happens offline on your computer, and so does turning your
   speech into text.
 - Risky actions show an **Allow / Deny** card, and you can also just say "yes" or "no".
+- **Esc stops VECTOR**: it stops talking, cancels what it's doing and denies any pending
+  action. While VECTOR is busy or talking, this works even when another app is in front.
+  (In the terminal, Ctrl+C does the same.)
 - Right-click the tray icon to turn listening off or quit. Change the shortcut with
   `vector --set hotkey=ctrl+alt+v`.
 

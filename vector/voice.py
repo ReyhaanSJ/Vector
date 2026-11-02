@@ -271,21 +271,46 @@ class Speaker:
     def __init__(self, enabled: bool = True):
         self.enabled = enabled
         self._engine = None
+        self._proc = None
+        self._stopped = threading.Event()
+
+    def stop(self) -> None:
+        """Stop talking right now (Esc)."""
+        self._stopped.set()
+        proc = self._proc
+        if proc is not None and proc.poll() is None:
+            proc.kill()
+        if self._engine is not None:
+            try:
+                self._engine.stop()
+            except Exception:
+                pass
 
     def say(self, text: str) -> None:
         if not self.enabled or not text.strip():
             return
+        import subprocess
         import sys
 
+        self._stopped.clear()
         if sys.platform == "win32":
-            from vector.osutil import powershell, ps_quote
+            from vector.osutil import ps_quote
 
-            powershell(
-                "Add-Type -AssemblyName System.Speech;"
-                "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer;"
-                f"$s.Rate = 1; $s.Speak({ps_quote(text[:1500])})",
-                timeout=120,
-            )
+            script = ("Add-Type -AssemblyName System.Speech;"
+                      "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer;"
+                      f"$s.Rate = 1; $s.Speak({ps_quote(text[:1500])})")
+            self._proc = subprocess.Popen(
+                ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW)
+            try:
+                self._proc.wait(timeout=120)
+            except BaseException:  # timeout, or Ctrl+C in the terminal: don't keep talking
+                self._proc.kill()
+                if not isinstance(sys.exc_info()[1], subprocess.TimeoutExpired):
+                    raise
+            finally:
+                self._proc = None
             return
         try:
             if self._engine is None:
@@ -397,6 +422,9 @@ class VoiceEngine:
         return None
 
     # -- speaking ------------------------------------------------------------------------
+    def stop_speaking(self) -> None:
+        self.speaker.stop()
+
     def say(self, text: str) -> None:
         """Speak with the mic muted, so VECTOR doesn't hear itself."""
         self.mic.muted = True

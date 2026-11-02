@@ -99,10 +99,11 @@ class SummonBar:
     """The pop-up bar. Every method must run on the Tk thread."""
 
     def __init__(self, root, on_submit: Callable[[str], None], on_toggle_voice: Callable[[], None],
-                 hotkey_label: str):
+                 hotkey_label: str, on_escape: Callable[[], None] | None = None):
         import tkinter as tk
 
         self.tk = tk
+        self.on_escape = on_escape
         self.root = root
         self.on_submit = on_submit
         self.on_toggle_voice = on_toggle_voice
@@ -210,14 +211,14 @@ class SummonBar:
         footer = tk.Frame(outer, bg=BG, padx=PAD, pady=10)
         footer.pack(fill="x", side="bottom")
         tk.Frame(outer, bg=LINE, height=1).pack(fill="x", side="bottom")
-        hints = f"Enter  run     Esc  close     {hotkey_label}  anywhere     or say “Vector”"
+        hints = f"Enter  run     Esc  stop / close     {hotkey_label}  anywhere     or say “Vector”"
         tk.Label(footer, text=hints, bg=BG, fg=DIM, font=self.f_small, anchor="w").pack(side="left")
         self.model_label = tk.Label(footer, text="", bg=BG, fg=MUTED, font=self.f_small, anchor="e")
         self.model_label.pack(side="right")
 
         self.entry.bind("<Return>", self._submit)
         self.entry.bind("<KeyRelease>", lambda e: self._update_placeholder())
-        win.bind("<Escape>", lambda e: self.hide())
+        win.bind("<Escape>", lambda e: (self.on_escape or self.hide)())
         win.bind("<Key>", self._key)
         win.bind("<Enter>", lambda e: self._cancel_auto_hide())
         win.bind("<FocusOut>", lambda e: self.root.after(200, self._maybe_hide))

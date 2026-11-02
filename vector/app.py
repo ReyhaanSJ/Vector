@@ -45,7 +45,12 @@ class VectorApp:
         self.update = None
 
         hotkey_label = "+".join(p.capitalize() for p in config.hotkey.split("+"))
-        self.bar = SummonBar(self.root, self.submit_typed, self.toggle_voice, hotkey_label)
+        self.bar = SummonBar(self.root, self.submit_typed, self.toggle_voice, hotkey_label,
+                             on_escape=self.stop_all)
+        self._busy = False
+        self._speaking = False
+        self._confirm_answer: Callable[[bool], None] | None = None
+        self._esc = None
 
         if agent is None:
             from vector.agent import Vector
@@ -115,18 +120,59 @@ class VectorApp:
         else:
             self.bar.show()
 
+    # -- stopping -------------------------------------------------------------------------------
+    def stop_all(self) -> None:
+        """Esc: stop talking, cancel what VECTOR is doing, deny any pending Allow, hide the bar."""
+        was_active = self._busy or self._speaking
+        self.agent.cancel()
+        if self._confirm_answer is not None:
+            self._confirm_answer(False)
+        if self.engine is not None:
+            self.engine.stop_speaking()
+        if self.bar.busy:
+            self.bar.finish_request("Stopped.")
+        self.bar.hide()
+        if was_active:
+            log.info("stopped by Esc")
+
+    def _set_active(self) -> None:
+        """While VECTOR is busy or talking, Esc stops it from anywhere; otherwise Esc is left alone."""
+        active = self._busy or self._speaking
+        if active and self._esc is None:
+            from vector.hotkey import GlobalHotkey
+
+            self._esc = GlobalHotkey("esc", lambda: self.ui(self.stop_all), allow_bare=True)
+            if not self._esc.start():
+                self._esc = None
+        elif not active and self._esc is not None:
+            self._esc.stop()
+            self._esc = None
+
+    def speak(self, text: str) -> None:
+        """Say something out loud (voice thread). Esc cuts it off."""
+        if self.engine is None or not text:
+            return
+        self._speaking = True
+        self.ui(self._set_active)
+        try:
+            self.engine.say(text)
+        finally:
+            self._speaking = False
+            self.ui(self._set_active)
+
     def submit_typed(self, text: str) -> None:
         self.bar.start_request(text, typed=True)
         self._requests.put((text, "typed", None))
 
-    def ask(self, text: str, source: str = "typed") -> str:
-        """Run a request on the brain thread and wait for the reply (used by voice)."""
+    def ask(self, text: str, source: str = "typed") -> str | None:
+        """Run a request on the brain thread and wait for the reply (used by voice).
+        None if it was stopped with Esc."""
         done = threading.Event()
-        box: list[str] = []
+        box: list[str | None] = []
         self.ui(self.bar.start_request, text, source == "typed")
         self._requests.put((text, source, (done, box)))
         done.wait()
-        return box[0] if box else ""
+        return box[0] if box else None
 
     def _show_model(self) -> None:
         from vector.config import describe_model
@@ -135,7 +181,7 @@ class VectorApp:
         self.bar.set_model(describe_model(self.config.resolved_provider, model))
 
     def _worker(self) -> None:
-        from vector.brain import BrainError
+        from vector.brain import BrainError, Cancelled
 
         while not self._quit.is_set():
             try:
@@ -143,18 +189,26 @@ class VectorApp:
             except queue.Empty:
                 continue
             self._current_source = source
+            self._busy = True
+            self.ui(self._set_active)
             error = False
+            reply: str | None
             try:
                 reply = self.agent.ask(text)
+            except Cancelled:
+                reply = None  # Esc: the bar already says "Stopped."
             except BrainError as exc:
                 reply, error = str(exc), True
             except Exception as exc:  # never let one bad request kill the app
                 log.exception("request failed")
                 reply, error = f"Something went wrong: {exc}", True
-            self.ui(self.bar.finish_request, reply, error)
+            self._busy = False
+            self.ui(self._set_active)
+            if reply is not None:
+                self.ui(self.bar.finish_request, reply, error)
+                if source == "voice":
+                    self.ui(self.bar.hide_later, 9000)
             self.ui(self._show_model)  # auto:free may have picked a different model
-            if source == "voice":
-                self.ui(self.bar.hide_later, 9000)
             if waiter:
                 done, box = waiter
                 box.append(reply)
@@ -170,16 +224,22 @@ class VectorApp:
                 result[0] = allowed
                 decided.set()
 
+        self._confirm_answer = answer
         self.ui(self.bar.ask_confirm, name, args, answer)
         if self._current_source == "voice" and self.engine is not None:
             def by_voice():
-                self.engine.say(f"Can I run {name.replace('_', ' ')}? Say yes or no.")
+                self.speak(f"Can I run {name.replace('_', ' ')}? Say yes or no.")
+                if decided.is_set():
+                    return
                 heard = self.engine.ask_yes_no(timeout=10, cancel=decided)
                 if heard is not None:
                     answer(heard)
             threading.Thread(target=by_voice, daemon=True).start()
         if not decided.wait(timeout=120):
             answer(False)
+        self._confirm_answer = None
+        if self.engine is not None and not decided.is_set():
+            self.engine.stop_speaking()
         self.ui(self.bar.cancel_confirm)
         return result[0]
 
@@ -236,14 +296,15 @@ class VectorApp:
                     continue
                 if not command:
                     self.ui(self.bar.set_status, "Yes?")
-                    engine.say("Yes?")
+                    self.speak("Yes?")
                     command = engine.listen_once()
                     if not command:
                         self.ui(self.bar.set_status, "")
                         self.ui(self.bar.hide_later, 1500)
                         continue
                 reply = self.ask(command, source="voice")
-                engine.say(reply)
+                if reply:  # None when stopped with Esc
+                    self.speak(reply)
             except VoiceUnavailable as exc:
                 self.voice_on = False
                 self.ui(self.bar.set_voice, False, False)

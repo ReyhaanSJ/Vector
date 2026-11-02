@@ -25,7 +25,9 @@ an older one. Remove everything with
 
 VECTOR starts with Windows and waits in the background (icon by the clock).
 
-- **`Ctrl+Shift+Space`** anywhere opens the summon bar. Type, then press Enter. Esc closes it.
+- **`Ctrl+Shift+Space`** anywhere opens the summon bar. Type, then press Enter.
+- **Esc** stops VECTOR: it stops talking, cancels the current request (no further steps run),
+  denies a pending Allow, and closes the bar. It works from any app while VECTOR is busy or talking.
 - **Say "Vector, ..."** to talk to it. No button needed. "Vector" alone works too: it answers
   "Yes?" and listens.
 - When VECTOR asks permission, click **Allow** or **Deny**, press **Y** or **N**, or say yes or no.

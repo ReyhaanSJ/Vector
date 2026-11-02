@@ -12,10 +12,19 @@ class FakeAgent:
     def __init__(self):
         self.confirm = None
         self.on_action = None
+        self.stopped = False
+
+    def cancel(self):
+        self.stopped = True
 
     def ask(self, text):
+        from vector.brain import Cancelled
+
+        self.stopped = False
         self.on_action("open_app", {"name": "calculator"})
         allowed = self.confirm("close_app", {"name": "calculator"})
+        if self.stopped:
+            raise Cancelled()
         return f"Handled '{text}', close allowed: {allowed}"
 
 
@@ -69,6 +78,29 @@ def test_summon_bar_round_trip():
         app.bar.hide()
         pump(app, 0.2)
         assert not app.bar.visible()
+    finally:
+        app.quit()
+        pump(app, 0.2)
+
+
+def test_escape_stops_everything():
+    from vector.app import VectorApp
+    from vector.config import Config
+
+    agent = FakeAgent()
+    app = VectorApp(Config(), agent=agent, enable_voice=False, enable_tray=False, enable_hotkey=False)
+    try:
+        app.bar.show()
+        app.bar.entry.insert(0, "close calculator")
+        app.bar._submit()
+        pump(app, 1.0)
+        assert app.bar._confirm_cb is not None   # waiting for Allow / Deny
+        app.bar.win.event_generate("<Escape>")    # the user presses Esc
+        pump(app, 1.0)
+        assert agent.stopped
+        assert app.bar.busy is False and not app.bar.visible()
+        assert app.bar.reply.cget("text") == "Stopped."
+        assert app._esc is None                   # Esc is given back to other apps when idle
     finally:
         app.quit()
         pump(app, 0.2)

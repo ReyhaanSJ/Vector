@@ -6,6 +6,7 @@ import datetime as dt
 import json
 import platform
 import sys
+import threading
 import traceback
 from collections.abc import Callable
 from pathlib import Path
@@ -62,6 +63,7 @@ class Vector:
         self.confirm = confirm or (lambda name, args: False)
         self.on_action = on_action
         self.registry = registry or REGISTRY
+        self._cancel = threading.Event()
         if registry is None:
             load_builtin_skills()
             user_dirs = [config.home / "skills", *map(Path, config.skill_dirs)]
@@ -81,13 +83,27 @@ class Vector:
             memory=memory_summary() or "(nothing yet)",
         )
 
+    def cancel(self) -> None:
+        """Stop the current request: no further skills run and its reply is dropped."""
+        self._cancel.set()
+
+    @property
+    def cancelled(self) -> bool:
+        return self._cancel.is_set()
+
     def execute(self, name: str, args: dict) -> tuple[str, bool]:
+        from vector.brain import Cancelled
+
+        if self._cancel.is_set():
+            raise Cancelled()
         t = self.registry.get(name)
         if t is None:
             return f"Unknown tool '{name}'.", True
         if self.on_action:
             self.on_action(name, args)
         if t.dangerous and self.config.confirm_dangerous and not self.confirm(name, args):
+            if self._cancel.is_set():
+                raise Cancelled()
             return "The user declined this action.", True
         try:
             result = t(**args)
@@ -100,7 +116,13 @@ class Vector:
         return result, False
 
     def ask(self, text: str) -> str:
-        return self.brain.respond(text, self.system_prompt(), self.registry.all(), self.execute)
+        from vector.brain import Cancelled
+
+        self._cancel.clear()
+        reply = self.brain.respond(text, self.system_prompt(), self.registry.all(), self.execute)
+        if self._cancel.is_set():  # stopped while the AI was still answering
+            raise Cancelled()
+        return reply
 
     def reset(self) -> None:
         self.brain.reset()

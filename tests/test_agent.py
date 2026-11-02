@@ -243,3 +243,60 @@ def test_openrouter_429_messages():
     assert daily and "midnight UTC" in msg
     msg, daily = describe_429('{"error":{"message":"m is temporarily rate-limited upstream"}}', "m")
     assert not daily and "busy" in msg
+
+
+def test_stop_during_approval_cancels_and_rolls_back():
+    from vector.brain import Cancelled
+
+    fake = FakeClaude([
+        NS(stop_reason="tool_use", content=[tool_use("t1", "wipe", {"path": "/x"})]),
+        NS(stop_reason="end_turn", content=[text("should never be reached")]),
+    ])
+    brain = ClaudeBrain(client=fake)
+    v = make_vector(brain)
+
+    def press_esc(name, args):
+        v.cancel()
+        return False
+
+    v.confirm = press_esc
+    with pytest.raises(Cancelled):
+        v.ask("wipe it")
+    assert calls == [] and len(fake.requests) == 1
+    assert brain.messages == []          # history stays valid for the next request
+    fake.responses = [NS(stop_reason="end_turn", content=[text("fresh start")])]
+    assert v.ask("hello") == "fresh start"  # cancel flag clears for the next request
+
+
+def test_stop_while_ai_is_answering_drops_the_reply():
+    from vector.brain import Cancelled
+
+    v = make_vector(ClaudeBrain(client=FakeClaude([])))
+
+    class SlowBrain:
+        model = "x"
+
+        def respond(self, text, system, tools, execute):
+            v.cancel()                   # Esc pressed while the AI was still thinking
+            return "late reply"
+
+        def reset(self):
+            pass
+
+    v.brain = SlowBrain()
+    with pytest.raises(Cancelled):
+        v.ask("hi")
+
+
+def test_ctrl_c_mid_request_keeps_history_valid():
+    fake = FakeClaude([NS(stop_reason="tool_use", content=[tool_use("t1", "greet", {"name": "A"})])])
+    brain = ClaudeBrain(client=fake)
+    v = make_vector(brain)
+
+    def interrupted(name, args):
+        raise KeyboardInterrupt
+
+    v.execute = interrupted
+    with pytest.raises(KeyboardInterrupt):
+        brain.respond("hi", "sys", [], v.execute)
+    assert brain.messages == []

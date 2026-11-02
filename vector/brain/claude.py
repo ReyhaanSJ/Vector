@@ -72,7 +72,7 @@ class ClaudeBrain(Brain):
         self.messages.append({"role": "user", "content": user_text})
         try:
             return self._loop(system, tools, execute)
-        except BrainError:
+        except BaseException:  # errors, Esc, Ctrl+C: drop the half-finished turn
             del self.messages[checkpoint:]  # keep history valid so the next request works
             raise
 
