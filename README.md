@@ -2,18 +2,21 @@
 
 <img src="docs/logo.png" alt="VECTOR" height="80">
 
-**An open-source AI assistant that runs your laptop.(BETA 0.4.0 PUBLIC)**
+**An open-source AI assistant that runs your laptop. (BETA 0.4.1 PUBLIC)**
 
 Type or say what you want ("open Spotify", "tidy my Downloads", "what's on my screen?",
 "search the web for today's news") and VECTOR works out the steps and does them.
 
-Windows 10 / 11 &nbsp;·&nbsp; Claude, free cloud AI or fully local AI &nbsp;·&nbsp; MIT licensed
+Windows 10 / 11 &nbsp;·&nbsp; macOS 11+ &nbsp;·&nbsp; Claude, free cloud AI or fully local AI &nbsp;·&nbsp; MIT licensed
 
 </div>
 
 > **Pre-release (beta):** VECTOR is still being tested, so you might run into bugs or rough
 > edges. If something breaks, please [open an issue](https://github.com/ReyhaanSJ/Vector/issues)
 > with what you did and a screenshot. Running `vector --selftest` and pasting its report helps a lot.
+
+> **New in 0.4.1: VECTOR for Mac.** Everything works on macOS too (Apple silicon and Intel).
+> It's brand new, so Mac bug reports are extra welcome. See [Mac: one command](#mac-one-command).
 
 > **Language:** VECTOR is **English only** for now. That covers the app, the guide, voice
 > commands and speech recognition (the wake word and speech models are English). You can type
@@ -48,7 +51,7 @@ Windows 10 / 11 &nbsp;·&nbsp; Claude, free cloud AI or fully local AI &nbsp;·&
 
 | | |
 |---|---|
-| **Summon it anywhere** | Press **Ctrl+Shift+Space** in any app, type a request, press Enter. |
+| **Summon it anywhere** | Press **Ctrl+Shift+Space** (Mac: **Control+Shift+Space**) in any app, type a request, press Enter. |
 | **Talk to it** | Just say **"Vector, …"**. No button to press. It answers out loud. |
 | **Hear answers** | A small speaker button reads replies aloud, even typed ones. |
 | **Run your laptop** | Open and close apps, files and folders, volume, brightness, dark mode, Wi-Fi, reminders, clipboard and more (43 skills). |
@@ -56,17 +59,17 @@ Windows 10 / 11 &nbsp;·&nbsp; Claude, free cloud AI or fully local AI &nbsp;·&
 | **Use the internet** | Searches the web and reads pages itself; downloads files when asked. |
 | **Remember you** | "Remember my project folder is D:\robot" and it'll know next time. |
 | **Stay safe** | Risky actions show **Allow / Deny** first. **Esc** stops anything instantly. |
-| **Keep itself updated** | New versions are offered from the tray icon. |
+| **Keep itself updated** | New versions are offered from the tray icon (Mac: the menu bar). |
 | **Your choice of AI** | Claude (best), free cloud models, or a free AI that runs entirely on your laptop. |
 
 ## 2. What you need
 
 | | Minimum | Notes |
 |---|---|---|
-| **Computer** | Windows 10 or 11 | macOS and Linux work from source for typing only, with fewer features (see [For developers](#15-for-developers)). |
+| **Computer** | Windows 10 or 11, or a Mac with macOS 11 Big Sur or newer | Apple silicon and Intel Macs both work. Linux works from source, with fewer features (see [For developers](#15-for-developers)). |
 | **Internet** | For setup, and for Claude / cloud AI | The local AI works offline after setup. |
 | **Disk space** | ~1 GB | Plus ~2–9 GB if you choose the local AI (the model download). |
-| **Memory** | 8 GB RAM | 16 GB+ for the local AI. An NVIDIA graphics card makes the local AI much faster. |
+| **Memory** | 8 GB RAM | 16 GB+ for the local AI. An NVIDIA graphics card (or an Apple silicon Mac) makes the local AI much faster. |
 | **Microphone** | Optional | Only needed for voice. |
 | **Python, Git** | Not needed | Setup brings everything it needs. |
 
@@ -97,6 +100,26 @@ irm https://raw.githubusercontent.com/ReyhaanSJ/Vector/HEAD/install.ps1 | iex
 | 4. AI brain | Asks which AI to use (next section) and sets it up, including installing Ollama for the free local AI. |
 | 5. Shortcuts | Adds **VECTOR** to the Desktop and Start Menu, lists it in **Settings → Apps**, and (if you agree) starts it when you log in. |
 
+### Mac: one command
+
+1. Open **Terminal** (press **Cmd + Space**, type `Terminal`, press Enter).
+2. Paste this and press Enter:
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/ReyhaanSJ/Vector/HEAD/install.sh | bash
+   ```
+
+3. Answer the questions (**Enter picks the suggested answer**). VECTOR appears in your
+   **Applications** folder; open it with Spotlight (**Cmd + Space**, "VECTOR").
+
+Or download **`VECTOR-Setup-<version>.zip`** from the [Releases page](https://github.com/ReyhaanSJ/Vector/releases),
+open it and double-click **`Install VECTOR.command`** (if macOS blocks it: right-click → **Open** → **Open**).
+
+The Mac setup does the same five steps: VECTOR goes to `~/Library/Application Support/VECTOR` with
+its own private Python, API keys are kept in your **Keychain**, and the free local AI picks a model
+for your Mac's memory. macOS asks once for the **Microphone**, **Screen Recording** and
+**Accessibility** when VECTOR first needs them. All the Mac details: **[docs/macos.md](docs/macos.md)**.
+
 ## 4. Choose VECTOR's AI brain
 
 Setup asks this, and you can change it any time.
@@ -113,7 +136,8 @@ Setup asks this, and you can change it any time.
 **Setting it up yourself:**
 
 - **Free local AI:** setup installs [Ollama](https://ollama.com) and picks a model that suits your
-  graphics card (`qwen2.5:7b` with 6 GB+ of graphics memory, otherwise `llama3.2`).
+  graphics card (`qwen2.5:7b` with 6 GB+ of graphics memory, otherwise `llama3.2`). On a Mac:
+  `qwen2.5:7b` on Apple silicon with 16 GB+ of memory, otherwise `llama3.2`.
 - **Free cloud AI:** sign up at [openrouter.ai](https://openrouter.ai), make a key at
   [openrouter.ai/keys](https://openrouter.ai/keys), and paste it when setup asks. VECTOR picks the
   best free model available automatically (`model = "auto:free"`) and switches if one is busy.
@@ -121,7 +145,7 @@ Setup asks this, and you can change it any time.
   some credit, and paste it when setup asks. Setting a monthly spend limit in the Console is a good idea.
   A Claude.ai subscription does not include API credit.
 
-**Switching later** (in PowerShell):
+**Switching later** (in PowerShell, or Terminal on a Mac):
 
 ```powershell
 vector --models                                   # what you can use right now
@@ -132,7 +156,13 @@ vector --set model=claude-haiku-5-5               # a specific model (Claude Hai
 setx OPENROUTER_API_KEY "sk-or-..."               # or ANTHROPIC_API_KEY "sk-ant-..."
 ```
 
-Restart VECTOR after changing settings (tray icon → Quit, then open it again).
+On a Mac, save a key in the Keychain instead of `setx` (or just run the install command again):
+
+```bash
+security add-generic-password -U -s VECTOR -a ANTHROPIC_API_KEY -w "sk-ant-..."
+```
+
+Restart VECTOR after changing settings (tray icon → Quit, or **Cmd+Q** on a Mac, then open it again).
 
 ## 5. First steps
 
@@ -142,11 +172,11 @@ Restart VECTOR after changing settings (tray icon → Quit, then open it again).
    <img src="docs/images/guide.png" alt="The eight pages of the VECTOR guide" width="720">
 
 2. **The tray icon.** VECTOR lives by the clock (click **^** if you can't see it). Right-click it for
-   the menu.
+   the menu. On a Mac, VECTOR is in the **Dock** and its menu is in the **menu bar**.
 3. **Your first request.** Press **Ctrl+Shift+Space**, type `what's my battery like?`, press Enter.
 4. **Your first voice command.** Say *"Vector, what time is it?"* The first time voice starts it
    may take a minute to load.
-5. **Check everything works** (optional). Open PowerShell and run `vector --selftest`.
+5. **Check everything works** (optional). Open PowerShell (Mac: Terminal) and run `vector --selftest`.
 
 ## 6. Using VECTOR
 
@@ -221,10 +251,13 @@ came from. Downloads ask first.
 | `/uninstall` | Removes VECTOR. It asks whether to keep your data. |
 | `/quit` (or `/exit`) | Closes VECTOR completely, including the tray icon |
 
-### 6.8 The tray menu
+### 6.8 The tray menu (Mac: the menu bar and Dock)
 
 Right-click the VECTOR icon by the clock: **Open VECTOR**, **Listen for "Vector"**, **Update to x.y.z**
 (when there is one), **Check for updates**, **Guide**, **Quit VECTOR**.
+
+On a Mac there's no tray: click VECTOR in the **Dock** to open the bar, and use the **VECTOR** menu
+at the top left of the screen (while VECTOR is the active app) for the same items. **Cmd+Q** quits.
 
 ## 7. Everything VECTOR can do (all skills)
 
@@ -237,8 +270,9 @@ the screen (asks once per request)**.
 | **Internet** | search the web and read results · read any web page · download a file ⚠ |
 | **Files** | list a folder · find files · open a file or folder · read a text file · create a folder · write a file ⚠ · move / rename ⚠ · delete ⚠ · tidy a folder into Images/Documents/… ⚠ |
 | **Screen** | look at the screen 🖥 · click 🖥 · move the mouse 🖥 · scroll 🖥 · drag 🖥 · type text 🖥 · keyboard shortcuts 🖥 |
-| **System** | battery / CPU / memory / disk · time and date · volume · lock screen · screenshot · shut down / restart / sleep ⚠ · run a command ⚠ (PowerShell) |
-| **Windows** | dark/light mode · screen brightness · open any Settings page · Wi-Fi status · show desktop · empty Recycle Bin ⚠ |
+| **System** | battery / CPU / memory / disk · time and date · volume · lock screen · screenshot · shut down / restart / sleep ⚠ · run a command ⚠ (PowerShell on Windows, the shell on a Mac) |
+| **Windows only** | dark/light mode · screen brightness · open any Settings page · Wi-Fi status · show desktop · empty Recycle Bin ⚠ |
+| **Mac only** | dark/light mode · open any System Settings page · Wi-Fi status · Wi-Fi on/off ⚠ · show desktop · empty the Bin ⚠ |
 | **Productivity** | reminders · notifications · read / write the clipboard · remember / recall / forget facts about you · media play/pause/next |
 
 ## 8. Things to try
@@ -256,8 +290,8 @@ the screen (asks once per request)**.
 
 ## 9. Settings
 
-Change any setting with **`vector --set name=value`** in PowerShell, then restart VECTOR.
-They're saved in `C:\Users\<you>\.vector\config.toml`.
+Change any setting with **`vector --set name=value`** in PowerShell (Mac: Terminal), then restart VECTOR.
+They're saved in `C:\Users\<you>\.vector\config.toml` (Mac: `~/.vector/config.toml`).
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -280,7 +314,8 @@ They're saved in `C:\Users\<you>\.vector\config.toml`.
 
 ## 10. Updating
 
-VECTOR checks once a day. When there's a new version, right-click the tray icon → **Update to x.y.z**.
+VECTOR checks once a day. When there's a new version, right-click the tray icon → **Update to x.y.z**
+(Mac: the VECTOR menu in the menu bar → **Update to x.y.z**).
 It downloads, installs and reopens itself, keeping your settings and memory.
 
 ```powershell
@@ -292,7 +327,8 @@ vector --update 0.3.1      # install a specific version (also to go back)
 ## 11. Uninstalling
 
 Type **`/uninstall`** in the summon bar, or use **Settings → Apps → VECTOR → Uninstall**, or run
-`vector --uninstall`.
+`vector --uninstall`. On a Mac, use `/uninstall` or `vector --uninstall` (dragging the app to the Bin
+leaves VECTOR's Python and login item behind).
 
 1. VECTOR asks **"Uninstall VECTOR?"**
 2. Then **"Keep your data?"** Your data is your settings and VECTOR's memory of you. Keep it and a
@@ -300,6 +336,7 @@ Type **`/uninstall`** in the summon bar, or use **Settings → Apps → VECTOR �
 
 **Esc at any point cancels**, and never deletes anything. Your AI keys are left in place in case
 other apps use them, and Ollama is a separate app (remove it in Settings → Apps if you don't need it).
+On a Mac, deleting your data also removes VECTOR's keys from the Keychain.
 
 ## 12. Privacy and safety
 
@@ -314,6 +351,8 @@ other apps use them, and Ollama is a separate app (remove it in Settings → App
 
 **Stored on your laptop:** settings and memory in `C:\Users\<you>\.vector\`; VECTOR itself in
 `%LOCALAPPDATA%\Programs\VECTOR`; API keys as Windows user settings (environment variables).
+On a Mac: settings and memory in `~/.vector/`, VECTOR in `~/Library/Application Support/VECTOR`, and
+API keys in your login **Keychain**.
 
 **Good habits:**
 - Keep `confirm_dangerous = true`. Running with `--yes` skips confirmations; only do that if you trust the request.
@@ -324,7 +363,8 @@ other apps use them, and Ollama is a separate app (remove it in Settings → App
 ## 13. Troubleshooting
 
 Start with **`vector --selftest`**. It checks everything and explains what's wrong. The app's log is
-at `C:\Users\<you>\.vector\app.log`.
+at `C:\Users\<you>\.vector\app.log` (Mac: `~/.vector/app.log`). Mac problems (permissions,
+shortcut, screen) are covered in [docs/macos.md](docs/macos.md#troubleshooting).
 
 | Problem | Fix |
 |---|---|
@@ -369,6 +409,8 @@ at `C:\Users\<you>\.vector\app.log`.
 | Voice (wake word, speech-to-text, speaking) | `vector/voice.py` |
 | Updates / uninstall | `vector/updater.py`, `vector/uninstall.py` |
 | Windows setup / removal | `install.ps1`, `scripts/uninstall-windows.ps1` |
+| Mac setup / removal | `install.sh`, `scripts/uninstall-macos.sh` |
+| Mac pieces (shortcut, Keychain, menu name) | `vector/macos.py` |
 
 ## 15. For developers
 
@@ -382,8 +424,9 @@ vector --app        # the app        ·   vector   # chat in the terminal (advan
 pytest              # tests          ·   ruff check .
 ```
 
-On macOS/Linux, voice needs PortAudio (`brew install portaudio` / `sudo apt install portaudio19-dev`).
-Screen, Start Menu, tray and Windows skills are Windows-first.
+On Linux, voice needs PortAudio (`sudo apt install portaudio19-dev`). On a Mac, use a Python with
+Tk (python.org or uv; Homebrew's needs `brew install python-tk`). Linux is typing-first: no installer,
+and the Windows-only skills don't load.
 
 **Add a skill:** drop a `.py` file in `C:\Users\<you>\.vector\skills\`:
 
@@ -405,7 +448,8 @@ and `@tool(screen=True)` for screen control. More in [docs/skills.md](docs/skill
 
 **Release a version:** bump the version in `pyproject.toml` and `vector/__init__.py`, then
 GitHub → **Actions → Release → Run workflow**. CI tests every change on Windows, macOS and Linux,
-including the real installer, the summon bar, and speech recognition with Windows' own voice.
+including the real Windows and Mac installers, the summon bar on both, and speech recognition with
+Windows' own voice.
 
 ## 16. Roadmap, contributing and license
 
@@ -413,6 +457,6 @@ including the real installer, the summon bar, and speech recognition with Window
 scheduled routines ("every morning at 9, open my work apps").
 
 **Contributing:** bug reports, ideas and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
-More Windows details: [docs/windows.md](docs/windows.md). Pre-launch checklist: [docs/TESTING.md](docs/TESTING.md).
+More details: [docs/windows.md](docs/windows.md) · [docs/macos.md](docs/macos.md). Pre-launch checklist: [docs/TESTING.md](docs/TESTING.md).
 
 **License:** [MIT](LICENSE). Free to use, change and share.

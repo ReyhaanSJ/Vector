@@ -30,7 +30,8 @@ dependencies = [
 voice = [
   "numpy>=1.26",
   "sounddevice>=0.4.6",
-  "vosk>=0.3.45",
+  "vosk>=0.3.45; sys_platform != 'darwin'",
+  "vosk>=0.3.44; sys_platform == 'darwin'",  # 0.3.44 is the newest with a Mac build
   "faster-whisper>=1.0",
   "pyttsx3>=2.90; sys_platform == 'linux'",
 ]

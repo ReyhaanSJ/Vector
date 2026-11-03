@@ -7,6 +7,7 @@ on:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -25,7 +26,8 @@ jobs:
       - run: ruff check .
       - run: pip install pillow
         if: runner.os != 'Linux'
-      - run: pytest -q
+      - run: pytest -q -o faulthandler_timeout=90
+        timeout-minutes: 10
         env:
           VECTOR_SCREENSHOTS: ${{ github.workspace }}/screenshots
           VECTOR_LIVE_UPDATE_TEST: ${{ runner.os == 'Linux' && '1' || '' }}
@@ -46,8 +48,9 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           pip install pyautogui
-          pytest -s -q tests/test_macos.py -k summon_bar_on_a_mac
-          pytest -s -q tests/test_macos.py -k guide_pages_on_a_mac
+          pytest -s -q -o faulthandler_timeout=90 tests/test_macos.py -k summon_bar_on_a_mac
+          pytest -s -q -o faulthandler_timeout=90 tests/test_macos.py -k guide_pages_on_a_mac
+        timeout-minutes: 8
         env:
           VECTOR_MAC_UI: "1"
       - run: vector --selftest
@@ -119,6 +122,7 @@ jobs:
   # Runs the real macOS installer end to end: opens the app, updates it, then uninstalls it.
   macos-installer:
     runs-on: macos-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
