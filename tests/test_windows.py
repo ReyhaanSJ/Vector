@@ -35,6 +35,7 @@ def test_settings_uri():
     assert settings_uri("nonsense page") is None
 
 
+@pytest.mark.skipif(sys.platform == "darwin", reason="a Mac uses a LaunchAgent (tests/test_macos.py)")
 def test_startup_enable_disable(tmp_path):
     path = startup.enable(app=True, folder=tmp_path)
     assert path.exists()

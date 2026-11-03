@@ -247,3 +247,13 @@ def test_installer_scripts_are_valid_bash():
         assert path.exists(), script
         assert subprocess.run(["bash", "-n", str(path)]).returncode == 0, script
         assert b"\r\n" not in path.read_bytes(), f"{script} has Windows line endings"
+
+
+@on_mac
+def test_start_at_login_on_a_mac(tmp_path):
+    from vector import startup
+
+    path = startup.enable(app=True, folder=tmp_path)
+    assert path.name == "com.vector.assistant.plist" and "--background" in path.read_text()
+    assert startup.disable(folder=tmp_path) is True
+    assert startup.disable(folder=tmp_path) is False

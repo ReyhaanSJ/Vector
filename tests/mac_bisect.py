@@ -1,6 +1,6 @@
-"""Finds which Mac-only touch makes the summon bar freeze (run by CI on macOS).
+"""Checks, on a real Mac, that typing reaches the summon bar (run by CI on macOS).
 
-    python tests/mac_bisect.py round=1 activate=1 focus=1
+    python tests/mac_bisect.py focus=1 make_key=1
 """
 import os
 import sys
@@ -8,18 +8,15 @@ import threading
 import time
 
 flags = dict(a.split("=") for a in sys.argv[1:])
-os.environ["VECTOR_MAC_ROUND"] = flags.get("round", "1")
-os.environ["VECTOR_MAC_ACTIVATE"] = flags.get("activate", "1")
+os.environ["VECTOR_MAC_MAKE_KEY"] = flags.get("make_key", "1")
 sys.path.insert(0, os.path.dirname(__file__))
 
 from test_app_ui import FakeAgent  # noqa: E402
 
-from vector.app import VectorApp  # noqa: E402
+from vector import macos  # noqa: E402
+from vector.app import VectorApp, _windows_identity  # noqa: E402
 from vector.config import Config  # noqa: E402
-
-
-def stage(name):
-    print(f"  stage: {name}", flush=True)
+from vector.ui import MAC_TITLE  # noqa: E402
 
 
 def watchdog():
@@ -29,8 +26,9 @@ def watchdog():
 
 
 threading.Thread(target=watchdog, daemon=True).start()
+_windows_identity()
 app = VectorApp(Config(focus_mode=flags.get("focus", "1") == "1", check_updates=False),
-                agent=FakeAgent(), enable_voice=False, enable_tray=False, enable_hotkey=False)
+                agent=FakeAgent(), enable_voice=False, enable_tray=True, enable_hotkey=False)
 
 
 def pump(seconds):
@@ -40,18 +38,20 @@ def pump(seconds):
         time.sleep(0.02)
 
 
-stage("show")
 app.bar.show()
-pump(0.5)
-stage("submit")
-app.bar.entry.insert(0, "open calculator")
-app.bar._submit()
-for i in range(10):
-    stage(f"pump {i}")
-    pump(0.1)
-stage(f"confirm card: {app.bar._confirm_cb is not None}")
-app.bar._answer(True)
-pump(1.0)
-stage(f"reply: {app.bar.reply.cget('text')!r}")
-print(f"OK {flags}", flush=True)
+pump(0.8)
+state = macos.window_state(MAC_TITLE)
+import pyautogui  # noqa: E402
+
+pyautogui.write("hello", interval=0.03)
+pump(0.8)
+typed = app.bar.entry.get()
+app.bar.hide()
+pump(0.3)
+app.bar.show()                       # second time, like pressing the shortcut again
+pump(0.8)
+pyautogui.write("again", interval=0.03)
+pump(0.8)
+again = app.bar.entry.get()
+print(f"RESULT {flags} typed={typed!r} second={again!r} window={state}", flush=True)
 os._exit(0)

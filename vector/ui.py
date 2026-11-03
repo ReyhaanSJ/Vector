@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -350,8 +351,6 @@ class SummonBar:
         if self._rounded or sys.platform not in ("win32", "darwin"):
             return
         if sys.platform == "darwin":
-            import os
-
             from vector.macos import round_window
 
             if os.environ.get("VECTOR_MAC_ROUND") == "0":
@@ -433,6 +432,10 @@ class SummonBar:
         self.win.lift()
         self.win.focus_force()
         self.entry.focus_set()
+        if sys.platform == "darwin":
+            from vector.macos import make_key
+
+            make_key(MAC_TITLE)
 
     def show(self, focus: bool = True) -> None:
         self._cancel_auto_hide()
@@ -448,14 +451,19 @@ class SummonBar:
         self._round_corners()
         if focus:
             if sys.platform == "darwin":
-                import os
-
                 from vector.macos import activate
 
                 if os.environ.get("VECTOR_MAC_ACTIVATE") != "0":
                     activate()  # VECTOR becomes the active app, so typing goes to the bar
             win.focus_force()
             self.entry.focus_set()
+            if sys.platform == "darwin" and os.environ.get("VECTOR_MAC_MAKE_KEY") != "0":
+                from vector.macos import make_key
+
+                # The dimmed overlay (shown first) can end up receiving the keyboard; hand it
+                # to the bar so typing goes into the input.
+                win.update_idletasks()
+                make_key(MAC_TITLE)
             if sys.platform == "win32":
                 try:
                     import ctypes

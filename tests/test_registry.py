@@ -1,3 +1,4 @@
+import sys
 from typing import Literal
 
 from vector.registry import REGISTRY, Registry, build_tool, load_builtin_skills, load_skill_dir
@@ -62,4 +63,5 @@ def test_guide_state_and_text(tmp_path, monkeypatch):
     guide.mark_seen()
     assert not guide.should_show()
     text = guide.text_guide("ctrl+alt+v")
-    assert "[Ctrl] + [Alt] + [V]" in text and "/uninstall" in text and "/guide" in text
+    keys = "[control] + [option] + [V]" if sys.platform == "darwin" else "[Ctrl] + [Alt] + [V]"
+    assert keys in text and "/uninstall" in text and "/guide" in text

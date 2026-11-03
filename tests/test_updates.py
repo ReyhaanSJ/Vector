@@ -83,15 +83,15 @@ def _zip(files: dict) -> bytes:
 
 
 def test_download_release_finds_installer(tmp_path, monkeypatch):
-    data = _zip({"ReyhaanSJ-Vector-abc123/install.ps1": "# installer",
+    data = _zip({f"ReyhaanSJ-Vector-abc123/{updater.INSTALLER}": "# installer",
                  "ReyhaanSJ-Vector-abc123/vector/__init__.py": ""})
     monkeypatch.setattr(updater, "_request", lambda url, accept=None: _FakeResponse(data))
     folder = updater.download_release(_releases("v0.2.0")[0], tmp_path)
-    assert (folder / "install.ps1").read_text() == "# installer"
+    assert (folder / updater.INSTALLER).read_text() == "# installer"
 
 
 def test_download_release_rejects_unsafe_zip(tmp_path, monkeypatch):
-    data = _zip({"../evil.txt": "x", "a/install.ps1": ""})
+    data = _zip({"../evil.txt": "x", f"a/{updater.INSTALLER}": ""})
     monkeypatch.setattr(updater, "_request", lambda url, accept=None: _FakeResponse(data))
     with pytest.raises(UpdateError):
         updater.download_release(_releases("v0.2.0")[0], tmp_path / "dl")
@@ -103,7 +103,7 @@ def test_download_asks_github_for_the_normal_format(tmp_path, monkeypatch):
 
     def fake_request(url, accept="application/vnd.github+json"):
         seen["accept"] = accept
-        return _FakeResponse(_zip({"x/install.ps1": ""}))
+        return _FakeResponse(_zip({f"x/{updater.INSTALLER}": ""}))
 
     monkeypatch.setattr(updater, "_request", fake_request)
     updater.download_release(_releases("v0.2.3")[0], tmp_path)
@@ -112,6 +112,15 @@ def test_download_asks_github_for_the_normal_format(tmp_path, monkeypatch):
 
 @pytest.mark.skipif(not __import__("os").environ.get("VECTOR_LIVE_UPDATE_TEST"),
                     reason="needs network + GitHub access (CI sets VECTOR_LIVE_UPDATE_TEST)")
+def test_mac_and_windows_installers_are_found_by_name(tmp_path, monkeypatch):
+    data = _zip({"v/install.sh": "#!/bin/bash", "v/install.ps1": "# ps"})
+    monkeypatch.setattr(updater, "_request", lambda url, accept=None: _FakeResponse(data))
+    for name in ("install.sh", "install.ps1"):
+        monkeypatch.setattr(updater, "INSTALLER", name)
+        folder = updater.download_release(_releases("v0.4.1")[0], tmp_path / name)
+        assert (folder / name).exists()
+
+
 def test_real_release_downloads(tmp_path):
     latest = updater.latest_release()
     assert latest is not None

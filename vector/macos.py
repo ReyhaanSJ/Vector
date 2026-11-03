@@ -332,3 +332,30 @@ def round_window(title: str, radius: float = 14.0) -> bool:
         return True
     except Exception:
         return False
+
+
+def make_key(title: str) -> bool:
+    """Make this window the one that receives typing (macOS' "key" window)."""
+    if not IS_MAC:
+        return False
+    try:
+        window = _find_window(title)
+        if not window:
+            return False
+        _send(window, "makeKeyAndOrderFront:", None, restype=None, argtypes=(ctypes.c_void_p,))
+        return bool(_send(window, "isKeyWindow", restype=ctypes.c_bool))
+    except Exception:
+        return False
+
+
+def window_state(title: str) -> dict:
+    """For diagnostics: can this window take typing, and does it have it right now?"""
+    if not IS_MAC:
+        return {}
+    window = _find_window(title)
+    if not window:
+        return {"found": False}
+    return {"found": True,
+            "can_be_key": bool(_send(window, "canBecomeKeyWindow", restype=ctypes.c_bool)),
+            "is_key": bool(_send(window, "isKeyWindow", restype=ctypes.c_bool)),
+            "app_active": bool(_send(_ns_app(), "isActive", restype=ctypes.c_bool))}

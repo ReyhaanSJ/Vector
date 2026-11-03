@@ -26,18 +26,16 @@ jobs:
       - run: ruff check .
       - run: pip install pillow
         if: runner.os != 'Linux'
-      - name: Which Mac-only touch freezes the bar? (diagnostic)
+      - name: Typing reaches the summon bar on a real Mac (diagnostic)
         if: runner.os == 'macOS'
-        timeout-minutes: 8
+        timeout-minutes: 6
         run: |
-          for combo in "round=0 activate=0 focus=0" "round=1 activate=0 focus=0" \
-                       "round=0 activate=1 focus=0" "round=0 activate=0 focus=1" \
-                       "round=1 activate=1 focus=1"; do
-            echo "== $combo"; python tests/mac_bisect.py $combo || true
+          pip install pyautogui
+          for combo in "focus=1 make_key=1" "focus=0 make_key=1" "focus=1 make_key=0" "focus=0 make_key=0"; do
+            python tests/mac_bisect.py $combo || true
           done
       - run: pytest -q -o faulthandler_timeout=90
         timeout-minutes: 10
-        continue-on-error: ${{ runner.os == 'macOS' }}  # TEMP while the Mac bar freeze is found
         env:
           VECTOR_SCREENSHOTS: ${{ github.workspace }}/screenshots
           VECTOR_LIVE_UPDATE_TEST: ${{ runner.os == 'Linux' && '1' || '' }}
