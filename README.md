@@ -2,7 +2,7 @@
 
 <img src="docs/logo.png" alt="VECTOR" height="80">
 
-**An open-source AI assistant that runs your laptop. (BETA 0.4.1 PUBLIC)**
+**An open-source AI assistant that runs your laptop.**
 
 Type or say what you want ("open Spotify", "tidy my Downloads", "what's on my screen?",
 "search the web for today's news") and VECTOR works out the steps and does them.
