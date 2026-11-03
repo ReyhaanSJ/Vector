@@ -1,6 +1,6 @@
 """VECTOR desktop app.
 
-Runs quietly in the background with a tray icon:
+Runs quietly in the background with a tray icon (on a Mac: the Dock and the menu bar):
   * press Ctrl+Shift+Space anywhere (configurable) to pop up the summon bar and type,
   * or just say "Vector, ..." - no button needed - and it listens, acts and answers out loud.
 
@@ -54,6 +54,7 @@ class VectorApp:
         self.voice_available = enable_voice
         self.engine = None
         self.tray = None
+        self._mac_menu = None
         self.hotkey = None
         self._current_source = "typed"
         self.update = None
@@ -96,7 +97,10 @@ class VectorApp:
             if not self.hotkey.start():
                 self.notify(f"Shortcut unavailable: {self.hotkey.error}")
         if enable_tray:
-            self._start_tray()
+            if sys.platform == "darwin":
+                self._start_mac_menu()
+            else:
+                self._start_tray()
         if enable_tray and config.check_updates:
             self.root.after(15000, self.check_updates)  # once things have settled
         if enable_voice and config.listen_on_start:
@@ -124,6 +128,11 @@ class VectorApp:
 
     def notify(self, message: str) -> None:
         log.info(message)
+        if sys.platform == "darwin" and self._mac_menu is not None:
+            from vector.osutil import notify
+
+            threading.Thread(target=notify, args=("VECTOR", message), daemon=True).start()
+            return
         if self.tray is not None:
             try:
                 self.tray.notify(message, "VECTOR")
@@ -429,10 +438,12 @@ class VectorApp:
             self.voice_on = False
             self._voice_pause.set()
             self.bar.set_voice(False)
+            self._sync_mac_menu()
             return
         self.voice_on = True
         self._voice_pause.clear()
         self.bar.set_voice(True)
+        self._sync_mac_menu()
         if self.engine is None:
             threading.Thread(target=self._voice_loop, name="vector-voice", daemon=True).start()
 
@@ -451,6 +462,7 @@ class VectorApp:
             self.voice_available = False
             self.voice_on = False
             self.ui(self.bar.set_voice, False, False)
+            self.ui(self._sync_mac_menu)
             self.notify(str(exc))
             return
         except Exception as exc:
@@ -532,6 +544,57 @@ class VectorApp:
             log.exception("tray icon failed")
             self.tray = None
 
+    # -- macOS: the menu bar and the Dock --------------------------------------------------
+    def _start_mac_menu(self) -> None:
+        """On a Mac, VECTOR's menu lives in the menu bar (while VECTOR is the active app) and
+        clicking its Dock icon opens the summon bar."""
+        import tkinter as tk
+
+        root = self.root
+        menubar = tk.Menu(root)
+        app_menu = tk.Menu(menubar, name="apple", tearoff=0)  # the bold "VECTOR" menu
+        menubar.add_cascade(menu=app_menu)
+        app_menu.add_command(label=f"About VECTOR {__version__}", state="disabled")
+        app_menu.add_separator()
+        app_menu.add_command(label="Open VECTOR", command=self.bar.show)
+        self._voice_var = tk.BooleanVar(value=self.voice_on)
+        app_menu.add_checkbutton(label="Listen for \u201cVector\u201d", variable=self._voice_var,
+                                 command=self.toggle_voice)
+        app_menu.add_separator()
+        app_menu.add_command(label="Check for updates", command=lambda: self.check_updates(force=True))
+        app_menu.add_command(label="Guide", command=self.open_guide)
+        app_menu.add_separator()
+        root.configure(menu=menubar)
+        self._mac_menu = app_menu
+        self._mac_update_index = None
+        self._sync_mac_menu()
+        try:
+            root.createcommand("::tk::mac::ReopenApplication", self.bar.show)  # Dock icon clicked
+            root.createcommand("::tk::mac::Quit", self.quit)                   # Cmd+Q / Dock > Quit
+            root.createcommand("tk::mac::ShowPreferences", self.show_model_info)
+        except tk.TclError:
+            pass
+
+    def _sync_mac_menu(self) -> None:
+        if self._mac_menu is not None:
+            self._voice_var.set(self.voice_on)
+            self._mac_menu.entryconfigure(3, state="normal" if self.voice_available else "disabled")
+
+    def _refresh_mac_menu(self) -> None:
+        menu = self._mac_menu
+        if menu is None:
+            return
+        self._voice_var.set(self.voice_on)
+        label = f"Update to {self.update.version}" if self.update else None
+        if label and self._mac_update_index is None:
+            menu.insert_command(5, label=label, command=self.start_update)
+            self._mac_update_index = 5
+        elif label:
+            menu.entryconfigure(self._mac_update_index, label=label)
+        elif self._mac_update_index is not None:
+            menu.delete(self._mac_update_index)
+            self._mac_update_index = None
+
     # -- updates ------------------------------------------------------------------------------
     def check_updates(self, force: bool = False) -> None:
         """Look for a newer VECTOR in the background; tell the user if there is one."""
@@ -554,8 +617,11 @@ class VectorApp:
                 except Exception:
                     pass
             if release:
-                self.notify(f"VECTOR {release.version} is available. "
-                            "Right-click the VECTOR tray icon > Update.")
+                where = ("Click VECTOR in the menu bar > Update" if sys.platform == "darwin"
+                         else "Right-click the VECTOR tray icon > Update")
+                self.notify(f"VECTOR {release.version} is available. {where}.")
+                if self._mac_menu is not None:
+                    self.ui(self._refresh_mac_menu)
             elif force:
                 self.notify(f"You have the newest VECTOR ({__version__}).")
 
@@ -624,7 +690,12 @@ def _setup_logging(config: Config) -> None:
 
 
 def _windows_identity() -> None:
-    """Tell Windows this is "VECTOR" (not Python), so it gets its own taskbar/notification identity."""
+    """Tell Windows this is "VECTOR" (not Python), so it gets its own taskbar/notification identity.
+    On a Mac: show "VECTOR" in the menu bar instead of "Python"."""
+    if sys.platform == "darwin":
+        from vector.macos import set_app_name
+
+        set_app_name()
     if sys.platform == "win32":
         try:
             import ctypes

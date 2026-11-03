@@ -24,7 +24,7 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: pip install pillow
-        if: runner.os == 'Windows'
+        if: runner.os != 'Linux'
       - run: pytest -q
         env:
           VECTOR_SCREENSHOTS: ${{ github.workspace }}/screenshots
@@ -42,6 +42,14 @@ jobs:
         run: pytest -q -s tests/test_screen_web.py -k live
         env:
           VECTOR_LIVE_WEB_TEST: "1"
+      - name: The summon bar on a real Mac screen (pictures are printed in the log)
+        if: runner.os == 'macOS'
+        run: |
+          pip install pyautogui
+          pytest -s -q tests/test_macos.py -k summon_bar_on_a_mac
+          pytest -s -q tests/test_macos.py -k guide_pages_on_a_mac
+        env:
+          VECTOR_MAC_UI: "1"
       - run: vector --selftest
         continue-on-error: true  # CI has no AI key, sound or screen; this just shows the report
 
@@ -107,6 +115,74 @@ jobs:
           if (Test-Path "$([Environment]::GetFolderPath('Startup'))\VECTOR.lnk") { throw "login shortcut still there" }
           if (Test-Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\VECTOR") { throw "still in Settings > Apps" }
           if (-not (Test-Path "$env:USERPROFILE\.vector\config.toml")) { throw "user data should be kept by default" }
+
+  # Runs the real macOS installer end to end: opens the app, updates it, then uninstalls it.
+  macos-installer:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ai: [none, ollama]
+    env:
+      VECTOR_INSTALL_YES: "1"
+      VECTOR_INSTALL_AI: ${{ matrix.ai }}
+      VECTOR_INSTALL_SKIP_MODEL: "1"
+      VECTOR_UNINSTALL_YES: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Double-click equivalent of "Install VECTOR.command"
+        run: echo | "./Install VECTOR.command"
+      - name: VECTOR is installed like a Mac app
+        run: |
+          APP="$HOME/Library/Application Support/VECTOR"
+          BUNDLE="$HOME/Applications/VECTOR.app"
+          "$HOME/.local/bin/vector" --version
+          "$HOME/.local/bin/vector" --list-skills | head -n 4
+          test -x "$BUNDLE/Contents/MacOS/VECTOR"
+          test -s "$BUNDLE/Contents/Resources/VECTOR.icns"
+          plutil -lint "$BUNDLE/Contents/Info.plist"
+          test "$(defaults read "$BUNDLE/Contents/Info" CFBundleName)" = "VECTOR"
+          defaults read "$BUNDLE/Contents/Info" NSMicrophoneUsageDescription
+          plutil -lint "$HOME/Library/LaunchAgents/com.vector.assistant.plist"
+          grep -q "VECTOR.app" "$HOME/Library/LaunchAgents/com.vector.assistant.plist"
+          "$APP/.venv/bin/python" -c "import tkinter; tkinter.Tcl(); import PIL, pyautogui, sounddevice, vosk, faster_whisper; print('Tk', tkinter.TkVersion, '+ app + voice packages OK')"
+          if "$APP/.venv/bin/python" -c "import pystray" 2>/dev/null; then echo "pystray isn't needed on a Mac"; exit 1; fi
+          grep -E "^(provider|model) =" "$HOME/.vector/config.toml" || true
+          if [ "${{ matrix.ai }}" = "ollama" ]; then
+            grep -q '^provider = "ollama"' "$HOME/.vector/config.toml"
+            ls -d /Applications/Ollama.app "$HOME/Applications/Ollama.app" 2>/dev/null | head -n 1 | grep -q Ollama
+          fi
+          "$HOME/.local/bin/vector" --selftest || true
+      - name: Open VECTOR from Applications and quit it
+        run: |
+          open "$HOME/Applications/VECTOR.app"
+          for i in $(seq 1 30); do pgrep -f "vector.app" >/dev/null && break; sleep 1; done
+          sleep 8
+          pgrep -fl "vector.app" || { echo "VECTOR didn't start"; cat "$HOME/.vector/app.log" || true; exit 1; }
+          cat "$HOME/.vector/app.log" || true
+          grep -q "crash" "$HOME/.vector/app.log" && exit 1
+          "$HOME/Library/Application Support/VECTOR/.venv/bin/python" -c "from vector.instance import signal_running; print('told it to quit:', signal_running('quit'))"
+          for i in $(seq 1 10); do pgrep -f "vector.app" >/dev/null || break; sleep 1; done
+          if pgrep -f "vector.app" >/dev/null; then echo "VECTOR didn't quit"; exit 1; fi
+      - name: Update over the top keeps settings
+        env:
+          VECTOR_INSTALL_KEEP_SETTINGS: "1"
+          VECTOR_INSTALL_AI: claude
+        run: |
+          bash install.sh > second-run.log 2>&1
+          cat second-run.log
+          grep -q "Already installed: uv" second-run.log
+          grep -q "Already installed: Python" second-run.log
+          ! grep -q 'provider = "anthropic"' "$HOME/.vector/config.toml"
+      - name: Uninstall
+        run: |
+          APP="$HOME/Library/Application Support/VECTOR"
+          bash "$APP/src/scripts/uninstall-macos.sh"
+          test ! -e "$APP"
+          test ! -e "$HOME/Applications/VECTOR.app"
+          test ! -e "$HOME/.local/bin/vector"
+          test ! -e "$HOME/Library/LaunchAgents/com.vector.assistant.plist"
+          test -f "$HOME/.vector/config.toml"   # user data is kept by default
 
   # Windows' own voice speaks "Vector. Open notepad." and VECTOR must understand it.
   speech-e2e:

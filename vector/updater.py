@@ -27,6 +27,7 @@ from vector import __version__
 from vector.config import HOME_DIR
 
 REPO = "ReyhaanSJ/Vector"
+INSTALLER = "install.sh" if sys.platform == "darwin" else "install.ps1"
 API = f"https://api.github.com/repos/{REPO}"
 CHECK_FILE = HOME_DIR / "update-check.json"
 CHECK_EVERY = 24 * 3600
@@ -152,22 +153,31 @@ def download_release(release: Release, dest: Path) -> Path:
             if not str(target).startswith(str(dest.resolve())):
                 raise UpdateError("The download looks damaged (unsafe file paths).")
         archive.extractall(dest)
-    installers = sorted(dest.glob("*/install.ps1"))
+    script = INSTALLER
+    installers = sorted(dest.glob(f"*/{script}"))
     if not installers:
-        raise UpdateError("That version can't update itself (it has no install.ps1).")
+        raise UpdateError(f"That version can't be installed from here (it has no {script}).")
     return installers[0].parent
 
 
 def install_release(release: Release) -> None:
     """Hand over to that version's installer, which closes VECTOR, updates it and reopens it.
     Your settings, memory and AI choice are kept."""
-    if sys.platform != "win32":
-        raise UpdateError("Automatic updates are Windows-only for now. Use: git pull && pip install -e .")
+    if sys.platform not in ("win32", "darwin"):
+        raise UpdateError("Automatic updates are for Windows and macOS. Use: git pull && pip install -e .")
     folder = download_release(release, Path(tempfile.mkdtemp(prefix="vector-update-")))
     env = dict(os.environ, VECTOR_INSTALL_YES="1", VECTOR_INSTALL_KEEP_SETTINGS="1",
                VECTOR_INSTALL_LAUNCH="1")
+    if sys.platform == "darwin":
+        # No window on macOS: the installer runs quietly and writes what it did to a log.
+        HOME_DIR.mkdir(parents=True, exist_ok=True)
+        log = open(HOME_DIR / "update.log", "w", encoding="utf-8")  # noqa: SIM115 (child keeps it)
+        subprocess.Popen(["/bin/bash", str(folder / INSTALLER)], cwd=str(folder), env=env,
+                         stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                         start_new_session=True)
+        return
     subprocess.Popen(
         ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
-         "-File", str(folder / "install.ps1")],
+         "-File", str(folder / INSTALLER)],
         cwd=str(folder), env=env, creationflags=subprocess.CREATE_NEW_CONSOLE,
     )

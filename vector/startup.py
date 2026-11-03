@@ -1,4 +1,4 @@
-"""Start VECTOR automatically when you log in (Windows)."""
+"""Start VECTOR automatically when you log in (Windows: a Startup shortcut, macOS: a LaunchAgent)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import os
 import sys
 from pathlib import Path
 
-from vector.osutil import IS_WINDOWS
+from vector.osutil import IS_MAC, IS_WINDOWS
 
 SCRIPT_NAME = "VECTOR.bat"
 
@@ -30,9 +30,54 @@ def app_launcher() -> tuple[str, str]:
     return str(pythonw if pythonw.exists() else sys.executable), "-m vector.app --background"
 
 
+MAC_LABEL = "com.vector.assistant"
+
+
+def launch_agents() -> Path:
+    return Path.home() / "Library" / "LaunchAgents"
+
+
+def mac_plist(app_bundle: Path | None = None) -> str:
+    """The LaunchAgent that opens VECTOR (in the background) when you log in."""
+    from xml.sax.saxutils import escape
+
+    from vector.macos import APP_BUNDLE
+
+    bundle = app_bundle or APP_BUNDLE
+    if bundle.exists():  # the installed app: open it the normal way, so macOS knows it's VECTOR
+        args = ["/usr/bin/open", "-g", "-a", str(bundle), "--args", "--background"]
+    else:
+        target, arguments = app_launcher()
+        args = [target, *arguments.split()]
+    items = "\n".join(f"    <string>{escape(a)}</string>" for a in args)
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>{MAC_LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+{items}
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Interactive</string>
+</dict>
+</plist>
+"""
+
+
 def enable(app: bool = True, folder: Path | None = None) -> Path:
     """Start VECTOR at login. app=True: the background app (tray, shortcut, voice);
     app=False: the terminal version. Returns the file created."""
+    if IS_MAC:
+        folder = folder or launch_agents()
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / f"{MAC_LABEL}.plist"
+        path.write_text(mac_plist(), encoding="utf-8")
+        return path
     folder = folder or startup_folder()
     folder.mkdir(parents=True, exist_ok=True)
     disable(folder)
@@ -64,6 +109,12 @@ def enable(app: bool = True, folder: Path | None = None) -> Path:
 
 
 def disable(folder: Path | None = None) -> bool:
+    if IS_MAC:
+        path = (folder or launch_agents()) / f"{MAC_LABEL}.plist"
+        if path.exists():
+            path.unlink()
+            return True
+        return False
     folder = folder or startup_folder()
     removed = False
     for name in (SCRIPT_NAME, SHORTCUT_NAME):
@@ -73,5 +124,12 @@ def disable(folder: Path | None = None) -> bool:
     return removed
 
 
+def is_enabled() -> bool:
+    if IS_MAC:
+        return (launch_agents() / f"{MAC_LABEL}.plist").exists()
+    folder = startup_folder()
+    return any((folder / name).exists() for name in (SCRIPT_NAME, SHORTCUT_NAME))
+
+
 def supported() -> bool:
-    return IS_WINDOWS
+    return IS_WINDOWS or IS_MAC

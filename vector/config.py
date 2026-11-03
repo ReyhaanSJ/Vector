@@ -140,6 +140,9 @@ def _coerce(value: str, current):
 
 
 def load_config(path: Path | None = None) -> Config:
+    from vector.macos import load_keys
+
+    load_keys()  # macOS: API keys saved by the installer live in the Keychain
     cfg = Config()
     path = path or config_path()
     if path.exists():

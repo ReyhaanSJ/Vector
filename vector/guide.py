@@ -26,10 +26,13 @@ from vector.ui import (
     CHIP,
     DIM,
     LINE,
+    MONO_FONTS,
     MUTED,
     PANEL,
     TEXT,
+    UI_FONTS,
     draw_mark,
+    fsize,
     pick_font,
     round_rect,
 )
@@ -143,8 +146,19 @@ def page_welcome(p: Pen, hotkey: str):
     c.create_text(CW / 2, 220, text="your laptop, on command", font=p.f["body"], fill=MUTED)
 
 
+MAC_KEY_NAMES = {"ctrl": "control", "control": "control", "shift": "shift", "alt": "option",
+                 "option": "option", "cmd": "command", "win": "command", "space": "space"}
+
+
+def key_labels(hotkey: str) -> list[str]:
+    """How the keys are printed on this computer's keyboard."""
+    if sys.platform == "darwin":
+        return [MAC_KEY_NAMES.get(k, k.upper() if len(k) == 1 else k) for k in hotkey.split("+")]
+    return [k.capitalize() if len(k) > 1 else k.upper() for k in hotkey.split("+")]
+
+
 def page_summon(p: Pen, hotkey: str):
-    keys = [k.capitalize() if len(k) > 1 else k.upper() for k in hotkey.split("+")]
+    keys = key_labels(hotkey)
     widths = [max(54, 18 + 10 * len(k)) for k in keys]
     total = sum(widths) + 28 * (len(keys) - 1)
     x = (CW - total) / 2
@@ -226,6 +240,55 @@ def page_tray(p: Pen, hotkey: str):
     c.create_text(40, 40, text="right-click the\nVECTOR icon", anchor="nw", font=p.f["body"], fill=MUTED)
 
 
+def page_mac_menu(p: Pen, hotkey: str):
+    """macOS: the VECTOR menu in the menu bar, and the Dock icon."""
+    c = p.c
+    round_rect(c, 30, 8, CW - 30, 38, 8, fill="#202830", outline="#202830")
+    c.create_text(52, 23, text="\uf8ff", font=p.f["body"], fill=TEXT)  # Apple logo (Mac fonts)
+    c.create_text(76, 23, text="VECTOR", anchor="w", font=p.f["head"], fill=TEXT)
+    for i, word in enumerate(("Edit", "Window")):
+        c.create_text(170 + i * 60, 23, text=word, anchor="w", font=p.f["small"], fill=MUTED)
+    c.create_text(CW - 50, 23, text="9:41", anchor="e", font=p.f["small"], fill=TEXT)
+    menu = ["Open VECTOR", "Listen for \u201cVector\u201d", "Update to 0.4.1", "Guide", "Quit VECTOR  \u2318Q"]
+    mx, my = 62, 44
+    round_rect(c, mx, my, mx + 210, my + 26 * len(menu) + 12, 10, fill=PANEL, outline=BORDER)
+    for i, item in enumerate(menu):
+        c.create_text(mx + 16, my + 19 + i * 26, text=item, anchor="w", font=p.f["small"],
+                      fill=ACCENT if item.startswith("Update") else TEXT)
+    # the Dock
+    dx = CW - 300
+    round_rect(c, dx, 196, dx + 250, 258, 16, fill="#202830", outline="#2A3846")
+    for i in range(4):
+        round_rect(c, dx + 14 + i * 58, 206, dx + 56 + i * 58, 248, 10,
+                   fill="#39434E" if i != 2 else BG, outline=ACCENT if i == 2 else "#39434E")
+    draw_mark(c, dx + 14 + 2 * 58 + 9, 213, 24, width=2)
+    c.create_oval(dx + 14 + 2 * 58 + 19, 251, dx + 14 + 2 * 58 + 23, 255, fill=TEXT, outline=TEXT)
+    c.create_text(dx - 16, 227, text="click it in the Dock\nto open the bar", anchor="e",
+                  font=p.f["small"], fill=MUTED, justify="right")
+
+
+def page_mac_allow(p: Pen, hotkey: str):
+    """macOS: the three permissions VECTOR may ask for."""
+    c = p.c
+    rows = [("Microphone", "to hear \u201cVector, ...\u201d"),
+            ("Screen Recording", "to see your screen when you ask"),
+            ("Accessibility", "to click and type for you")]
+    x0, x1 = 90, CW - 90
+    round_rect(c, x0, 14, x1, 30 + 66 * len(rows), 14, fill=PANEL, outline=BORDER)
+    c.create_text(x0 + 20, 34, text="System Settings \u203a Privacy & Security", anchor="w",
+                  font=p.f["small"], fill=MUTED)
+    for i, (name, why) in enumerate(rows):
+        y = 56 + i * 66
+        c.create_line(x0 + 16, y - 8, x1 - 16, y - 8, fill=LINE)
+        draw_mark(c, x0 + 22, y + 6, 22, width=2)
+        c.create_text(x0 + 60, y + 8, text=f"VECTOR \u00b7 {name}", anchor="w", font=p.f["head"],
+                      fill=TEXT)
+        c.create_text(x0 + 60, y + 32, text=why, anchor="w", font=p.f["small"], fill=MUTED)
+        tx = x1 - 76  # a switch, turned on
+        round_rect(c, tx, y + 6, tx + 52, y + 34, 14, fill=ACCENT, outline=ACCENT)
+        c.create_oval(tx + 27, y + 9, tx + 49, y + 31, fill=TEXT, outline=TEXT)
+
+
 def page_try(p: Pen, hotkey: str):
     from tkinter import font as tkfont
 
@@ -262,6 +325,14 @@ PAGES: list[tuple[str, str, Callable]] = [
      "/uninstall to remove VECTOR (you can keep your data).", page_try),
 ]
 
+if sys.platform == "darwin":  # a Mac has no tray; it has the menu bar, the Dock and permissions
+    _tray = next(i for i, page in enumerate(PAGES) if page[2] is page_tray)
+    PAGES[_tray] = ("Find it in the menu bar", "When VECTOR is the active app, its menu is at the top "
+                    "left: listen, update, this guide, quit. Or click its icon in the Dock.",
+                    page_mac_menu)
+    PAGES.insert(_tray + 1, ("Allow VECTOR on your Mac", "macOS asks once for each of these. "
+                             "If you said no, turn VECTOR on here and reopen it.", page_mac_allow))
+
 
 # -- the window ----------------------------------------------------------------------------------
 class GuideWindow:
@@ -286,17 +357,18 @@ class GuideWindow:
         win.bind("<Left>", lambda e: self.back())
         self._icon(win)
 
-        ui = pick_font(win, ["Segoe UI Variable Text", "Segoe UI", "Inter"], "Helvetica")
-        disp = pick_font(win, ["Segoe UI Variable Display", "Segoe UI Semibold", "Inter Display",
-                               "Inter"], ui)
-        mono = pick_font(win, ["Cascadia Mono", "Consolas", "DejaVu Sans Mono"], "Courier")
-        self.fonts = {"title": (disp, 26, "bold"), "head": (ui, 13, "bold"), "body": (ui, 12),
-                      "small": (ui, 10), "key": (ui, 13, "bold"), "big": (ui, 20),
-                      "mono": (mono, 11), "button": (ui, 11, "bold"), "step": (ui, 9, "bold")}
+        ui = pick_font(win, UI_FONTS, "Helvetica")
+        disp = pick_font(win, ["Segoe UI Variable Display", "Segoe UI Semibold", "SF Pro Display",
+                               "Inter Display", "Inter"], ui)
+        mono = pick_font(win, MONO_FONTS, "Courier")
+        f = fsize
+        self.fonts = {"title": (disp, f(26), "bold"), "head": (ui, f(13), "bold"), "body": (ui, f(12)),
+                      "small": (ui, f(10)), "key": (ui, f(13), "bold"), "big": (ui, f(20)),
+                      "mono": (mono, f(11)), "button": (ui, f(11), "bold"), "step": (ui, f(9), "bold")}
 
         self.step = tk.Label(win, text="", bg=BG, fg=ACCENT, font=self.fonts["step"], anchor="w")
         self.step.place(x=40, y=28)
-        self.title = tk.Label(win, text="", bg=BG, fg=TEXT, font=(disp, 20, "bold"), anchor="w")
+        self.title = tk.Label(win, text="", bg=BG, fg=TEXT, font=(disp, fsize(20), "bold"), anchor="w")
         self.title.place(x=40, y=48)
         self.canvas = tk.Canvas(win, width=CW, height=CH, bg=BG, highlightthickness=0)
         self.canvas.place(x=(W - CW) // 2, y=104)
@@ -384,7 +456,9 @@ class GuideWindow:
 
 def text_guide(hotkey: str = "ctrl+shift+space") -> str:
     """The guide for places without a screen (it's also handy as a cheat sheet)."""
-    keys = " + ".join(f"[{k.capitalize()}]" for k in hotkey.split("+"))
+    keys = " + ".join(f"[{k}]" for k in key_labels(hotkey))
+    where = ("Menu bar       VECTOR menu (top left) or its Dock icon: listen, update, guide, quit"
+             if sys.platform == "darwin" else "Tray icon      by the clock: listen, update, guide, quit")
     return f"""
    /\\     V E C T O R  guide
   /||\\    your laptop, on command
@@ -395,7 +469,7 @@ def text_guide(hotkey: str = "ctrl+shift+space") -> str:
   3  Hear it        the small speaker button under the mic
   4  It asks first  risky actions and your screen need an OK:  Allow / Deny, or Y / N
   5  Stop           [Esc] stops talking, cancels a task, closes the bar
-  6  Tray icon      by the clock: listen, update, guide, quit
+  6  {where}
      Commands       /guide  this guide      /uninstall  remove VECTOR (keep your data if you like)
   7  Try            "what's on my screen?"  "search the web for today's news"
                     "tidy my downloads"     "remind me in 20 minutes"

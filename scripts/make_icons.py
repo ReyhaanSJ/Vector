@@ -3,7 +3,8 @@
     python scripts/make_icons.py
 
 Writes vector/assets/: icon.ico (Windows shortcuts and windows, 16-256 px),
-icon.png (256 px), tray.png (64 px), and docs/logo.png (wordmark for the README).
+icon.png (256 px), icon.icns (the macOS app, 16-1024 px), tray.png (64 px), and docs/logo.png
+(wordmark for the README).
 """
 
 from pathlib import Path
@@ -34,18 +35,24 @@ def triangle(draw: ImageDraw.ImageDraw, box: tuple[float, float, float, float], 
         draw.ellipse((px - r, py - r, px + r, py + r), fill=color)
 
 
-def app_icon(size: int) -> Image.Image:
+def app_icon(size: int, pad_ratio: float = 0.04) -> Image.Image:
     s = size * SS
     img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    pad = s * 0.04
-    radius = s * 0.23
+    pad = s * pad_ratio
+    radius = s * 0.23 * (1 - 2 * pad_ratio) / 0.92  # same shape, smaller when padded
     d.rounded_rectangle((pad, pad, s - pad, s - pad), radius=radius, fill=BG,
                         outline=EDGE, width=max(SS, round(s * 0.012)))
     stroke = s * (0.085 if size <= 32 else 0.065)  # thicker lines stay visible when tiny
-    inset = s * 0.25
-    triangle(d, (inset, s * 0.25, s - inset, s * 0.74), stroke)
+    inset = s * 0.25 + pad - s * 0.04
+    triangle(d, (inset, s * 0.25 + (pad - s * 0.04) * 0.5, s - inset,
+                 s * 0.74 - (pad - s * 0.04) * 0.5), stroke)
     return img.resize((size, size), Image.LANCZOS)
+
+
+def mac_icon() -> Image.Image:
+    """macOS icons leave a margin around the rounded square (Apple's icon grid: ~10%)."""
+    return app_icon(1024, pad_ratio=0.1)
 
 
 def tray_icon(size: int = 64) -> Image.Image:
@@ -93,6 +100,7 @@ def main() -> None:
     sizes = [16, 20, 24, 32, 40, 48, 64, 128, 256]
     frames = [app_icon(n) for n in sizes]
     frames[-1].save(ASSETS / "icon.ico", sizes=[(n, n) for n in sizes], append_images=frames[:-1])
+    mac_icon().save(ASSETS / "icon.icns")
     tray_icon(64).save(ASSETS / "tray.png")
     (ROOT / "docs").mkdir(exist_ok=True)
     wordmark(160).save(ROOT / "docs" / "logo.png")

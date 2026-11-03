@@ -266,7 +266,7 @@ class Transcriber:
 
 
 class Speaker:
-    """Speaks text out loud. Windows' own voice on Windows, pyttsx3 elsewhere."""
+    """Speaks text out loud: Windows' or macOS' own voice, pyttsx3 on Linux."""
 
     def __init__(self, enabled: bool = True):
         self.enabled = enabled
@@ -286,10 +286,37 @@ class Speaker:
             except Exception:
                 pass
 
+    def _run(self, cmd: list[str], stdin_text: str | None = None) -> None:
+        """Speak with a helper program that Esc can stop (kill) at any moment."""
+        import subprocess
+        import sys
+
+        flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+        try:
+            self._proc = subprocess.Popen(
+                cmd, stdin=subprocess.PIPE if stdin_text is not None else subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+        except OSError:
+            self.enabled = False  # no speech program here; stay silent
+            return
+        try:
+            if stdin_text is not None:
+                try:
+                    self._proc.stdin.write(stdin_text.encode("utf-8"))
+                    self._proc.stdin.close()
+                except OSError:
+                    pass  # stopped (killed) before it finished reading
+            self._proc.wait(timeout=120)
+        except BaseException:  # timeout, or Ctrl+C in the terminal: don't keep talking
+            self._proc.kill()
+            if not isinstance(sys.exc_info()[1], subprocess.TimeoutExpired):
+                raise
+        finally:
+            self._proc = None
+
     def say(self, text: str) -> None:
         if not self.enabled or not text.strip():
             return
-        import subprocess
         import sys
 
         self._stopped.clear()
@@ -299,18 +326,11 @@ class Speaker:
             script = ("Add-Type -AssemblyName System.Speech;"
                       "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer;"
                       f"$s.Rate = 1; $s.Speak({ps_quote(text[:1500])})")
-            self._proc = subprocess.Popen(
-                ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                creationflags=subprocess.CREATE_NO_WINDOW)
-            try:
-                self._proc.wait(timeout=120)
-            except BaseException:  # timeout, or Ctrl+C in the terminal: don't keep talking
-                self._proc.kill()
-                if not isinstance(sys.exc_info()[1], subprocess.TimeoutExpired):
-                    raise
-            finally:
-                self._proc = None
+            self._run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script])
+            return
+        if sys.platform == "darwin":
+            # macOS' own voice. Text goes in on stdin, so nothing in it is read as an option.
+            self._run(["say", "-r", "190"], stdin_text=text[:1500])
             return
         try:
             if self._engine is None:

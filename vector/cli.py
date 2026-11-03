@@ -7,7 +7,7 @@
     vector --list-skills        show everything VECTOR can do
     vector --selftest           check that everything works on this computer
     vector --app                background app: summon bar + say "Vector, ..." anywhere
-    vector --startup on         start the VECTOR app when you log in (Windows)
+    vector --startup on         start the VECTOR app when you log in (Windows and macOS)
 """
 
 from __future__ import annotations
@@ -132,7 +132,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--list-skills", action="store_true", help="list available skills")
     p.add_argument("--selftest", action="store_true", help="check that everything works on this computer")
     p.add_argument("--startup", choices=["on", "off", "terminal"],
-                   help="Windows: start VECTOR at login (on = background app, terminal, off = remove)")
+                   help="start VECTOR at login (on = background app, terminal, off = remove)")
     p.add_argument("--version", action="version", version=f"VECTOR {__version__}")
     return p
 
@@ -251,7 +251,7 @@ def set_startup(mode: str) -> int:
     from vector import startup
 
     if not startup.supported():
-        print("Start-at-login is only set up for Windows so far. PRs welcome!")
+        print("Start-at-login is set up for Windows and macOS so far. PRs welcome!")
         return 1
     if mode == "off":
         removed = startup.disable()

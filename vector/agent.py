@@ -54,6 +54,10 @@ def _os_name() -> str:
         # Windows 11 still reports release "10"; build 22000+ is Windows 11.
         build = sys.getwindowsversion().build  # type: ignore[attr-defined]
         return f"Windows {'11' if build >= 22000 else '10'} (build {build})"
+    if platform.system() == "Darwin":
+        version = platform.mac_ver()[0] or platform.release()
+        return (f"macOS {version} ({platform.machine()}). Keyboard shortcuts use the command key: "
+                "press_keys('command+c'), not ctrl")
     return f"{platform.system()} {platform.release()}"
 
 

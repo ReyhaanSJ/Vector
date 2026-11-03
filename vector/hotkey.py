@@ -1,7 +1,8 @@
 """System-wide keyboard shortcut (default Ctrl+Shift+Space) that opens the summon bar.
 
 Windows uses the built-in RegisterHotKey API (no extra packages, no admin rights).
-Other systems use pynput if it is installed.
+macOS uses Carbon's RegisterEventHotKey (no extra packages, no Accessibility permission).
+Linux uses pynput if it is installed.
 """
 
 from __future__ import annotations
@@ -66,6 +67,7 @@ class GlobalHotkey:
         self._thread: threading.Thread | None = None
         self._thread_id = None
         self._listener = None
+        self._carbon = None
         self._ready = threading.Event()
 
     def start(self) -> bool:
@@ -79,6 +81,14 @@ class GlobalHotkey:
             self._thread = threading.Thread(target=self._windows_loop, name="vector-hotkey", daemon=True)
             self._thread.start()
             self._ready.wait(3)
+            return self.error is None
+        if sys.platform == "darwin":
+            from vector.macos import CarbonHotkey
+
+            self._carbon = CarbonHotkey(self.combo, self.callback)
+            self.error = self._carbon.register()
+            if self.error:
+                self._carbon = None
             return self.error is None
         try:
             from pynput import keyboard
@@ -116,6 +126,9 @@ class GlobalHotkey:
             user32.UnregisterHotKey(None, 1)
 
     def stop(self) -> None:
+        if self._carbon is not None:
+            self._carbon.unregister()
+            self._carbon = None
         if self._listener is not None:
             self._listener.stop()
         if sys.platform == "win32" and self._thread_id:

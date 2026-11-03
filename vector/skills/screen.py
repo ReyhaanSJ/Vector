@@ -42,6 +42,14 @@ def shrink(width: int, height: int) -> float:
     return min(1.0, MAX_W / width, MAX_H / height)
 
 
+def click_scale(image_w: int, shot_w: int, mouse_w: int) -> float:
+    """Screenshot pixels per mouse unit. Same as the shrink factor unless the screenshot has
+    more pixels than the mouse has positions (Retina screens: 2x)."""
+    if mouse_w <= 0 or shot_w <= 0:
+        return image_w / shot_w if shot_w else 1.0
+    return image_w / mouse_w
+
+
 def to_screen(x: float, y: float, scale: float | None = None) -> tuple[int, int]:
     """Screenshot pixel -> real screen pixel."""
     s = scale if scale is not None else _state["scale"]
@@ -73,7 +81,10 @@ def look_at_screen() -> ToolOutput | str:
         from PIL import Image
 
         img = img.resize((round(full_w * scale), round(full_h * scale)), Image.LANCZOS)
-    _state["scale"] = scale
+    # Clicks use the mouse's own units. On a Mac Retina screen a screenshot has twice as many
+    # pixels as those units, so the image -> mouse factor comes from the two real sizes.
+    _state["scale"] = click_scale(img.width, full_w, gui.size()[0])
+    scale = _state["scale"]
     buf = io.BytesIO()
     img.convert("RGB").save(buf, "JPEG", quality=72)
     mx, my = to_image(*gui.position(), scale)

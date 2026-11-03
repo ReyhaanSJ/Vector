@@ -39,6 +39,21 @@ def describe_step(name: str, args: dict) -> str:
     return label
 
 
+# Tk on macOS draws fonts at 72 dpi (Windows: 96), so the same size looks smaller on a Mac.
+FONT_SCALE = 1.3 if sys.platform == "darwin" else 1.0
+UI_FONTS = ["Segoe UI Variable Text", "Segoe UI", "SF Pro Text", ".AppleSystemUIFont",
+            "Helvetica Neue", "Inter"]
+MONO_FONTS = ["Cascadia Mono", "Consolas", "SF Mono", "Menlo", "JetBrains Mono", "DejaVu Sans Mono"]
+
+
+MAC_TITLE = "VECTOR summon bar"
+
+
+def fsize(points: int) -> int:
+    """A font size that looks the same on Windows and macOS."""
+    return round(points * FONT_SCALE)
+
+
 def pick_font(root, candidates: list[str], fallback: str) -> str:
     from tkinter import font
 
@@ -117,7 +132,7 @@ class Tooltip:
         self.tip.overrideredirect(True)
         self.tip.attributes("-topmost", True)
         tk.Label(self.tip, text=self.text(), bg=PANEL, fg=TEXT, padx=8, pady=4,
-                 font=("Segoe UI", 9) if sys.platform == "win32" else ("Helvetica", 9),
+                 font=("Segoe UI", 9) if sys.platform == "win32" else ("Helvetica", fsize(9)),
                  highlightthickness=1, highlightbackground=BORDER).pack()
         self.tip.update_idletasks()
         x = w.winfo_rootx() + w.winfo_width() - self.tip.winfo_reqwidth()
@@ -157,26 +172,26 @@ class SummonBar:
         self.voice_on = False
         self.voice_available = True
 
-        ui = pick_font(root, ["Segoe UI Variable Text", "Segoe UI", "Inter", "SF Pro Text"], "Helvetica")
-        mono = pick_font(root, ["Cascadia Mono", "Consolas", "JetBrains Mono", "DejaVu Sans Mono"],
-                         "Courier")
-        self.f_input = (ui, 15)
-        self.f_body = (ui, 11)
-        self.f_small = (ui, 9)
-        self.f_label = (ui, 8, "bold")
-        self.f_mono = (mono, 9)
-        self.f_button = (ui, 10, "bold")
+        ui = pick_font(root, UI_FONTS, "Helvetica")
+        mono = pick_font(root, MONO_FONTS, "Courier")
+        self.f_input = (ui, fsize(15))
+        self.f_body = (ui, fsize(11))
+        self.f_small = (ui, fsize(9))
+        self.f_label = (ui, fsize(8), "bold")
+        self.f_mono = (mono, fsize(9))
+        self.f_button = (ui, fsize(10), "bold")
 
         win = self.win = tk.Toplevel(root)
         win.withdraw()
         win.overrideredirect(True)
         win.attributes("-topmost", True)
         win.configure(bg=BG)
+        win.title(MAC_TITLE)  # never shown; lets macOS find this window to round its corners
         self._set_icon(win)
 
-        # Off Windows 11 there are no native rounded corners; a thin border frames the panel.
-        outer = tk.Frame(win, bg=BG, highlightthickness=0 if sys.platform == "win32" else 1,
-                         highlightbackground=BORDER)
+        # Off Windows 11 / macOS there are no rounded corners; a thin border frames the panel.
+        outer = self._outer = tk.Frame(win, bg=BG, highlightthickness=0 if sys.platform == "win32"
+                                       else 1, highlightbackground=BORDER)
         outer.pack(fill="both", expand=True)
 
         # -- header: mark, input, mic ----------------------------------------------------
@@ -249,10 +264,10 @@ class SummonBar:
         warn.create_oval(8, 13, 10, 15, fill=AMBER, outline="")
         warn.pack(side="left", padx=(0, 8))
         self.confirm_title = tk.Label(title, text="Needs your OK", bg=AMBER_BG, fg=AMBER,
-                                      font=(ui, 11, "bold"), anchor="w")
+                                      font=(ui, fsize(11), "bold"), anchor="w")
         self.confirm_title.pack(side="left")
         self.confirm_call = tk.Label(self.confirm_inner, text="", bg=AMBER_BG, fg=AMBER_TEXT,
-                                     font=(mono, 10), anchor="w", justify="left",
+                                     font=(mono, fsize(10)), anchor="w", justify="left",
                                      wraplength=WIDTH - 2 * PAD - 60)
         self.confirm_call.pack(fill="x", pady=(8, 2))
         self.confirm_hint = tk.Label(self.confirm_inner, text="", bg=AMBER_BG, fg="#C9B48A",
@@ -330,8 +345,17 @@ class SummonBar:
         return ""
 
     def _round_corners(self) -> None:
-        """Windows 11: native rounded corners, soft shadow and a thin border colour."""
-        if self._rounded or sys.platform != "win32":
+        """Windows 11: native rounded corners, soft shadow and a thin border colour.
+        macOS: rounded corners and a shadow through the window's own layer."""
+        if self._rounded or sys.platform not in ("win32", "darwin"):
+            return
+        if sys.platform == "darwin":
+            from vector.macos import round_window
+
+            self.win.update_idletasks()
+            self._rounded = round_window(MAC_TITLE, radius=14.0)
+            if self._rounded:
+                self._outer.configure(highlightthickness=0)  # the rounded edge replaces the border
             return
         self._rounded = True
         try:
@@ -419,6 +443,10 @@ class SummonBar:
         win.lift()
         self._round_corners()
         if focus:
+            if sys.platform == "darwin":
+                from vector.macos import activate
+
+                activate()  # VECTOR becomes the active app, so typing goes to the bar
             win.focus_force()
             self.entry.focus_set()
             if sys.platform == "win32":

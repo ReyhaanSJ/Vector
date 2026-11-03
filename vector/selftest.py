@@ -112,8 +112,10 @@ def check_shell() -> str:
 
 
 def check_start_menu() -> str:
+    if platform.system() == "Darwin":
+        return check_mac_apps()
     if platform.system() != "Windows":
-        raise Skip("Windows only")
+        raise Skip("Windows and macOS only")
     from vector.skills.apps import best_app_match, windows_start_apps
 
     apps = windows_start_apps()
@@ -123,9 +125,55 @@ def check_start_menu() -> str:
     return f"{len(apps)} apps found; recognises {', '.join(found) or 'none of calculator/notepad/edge'}"
 
 
+def check_mac_apps() -> str:
+    if platform.system() != "Darwin":
+        raise Skip("macOS only")
+    from vector.skills.apps import best_app_match, mac_apps
+
+    apps = mac_apps()
+    if not apps:
+        raise RuntimeError("found no apps in /Applications")
+    found = [q for q in ("calculator", "safari", "textedit") if best_app_match(q, apps)]
+    return f"{len(apps)} apps found; recognises {', '.join(found) or 'none of calculator/safari/textedit'}"
+
+
+def check_mac_shortcut() -> str:
+    if platform.system() != "Darwin":
+        raise Skip("macOS only")
+    from vector.macos import CarbonHotkey
+
+    hotkey = CarbonHotkey("ctrl+alt+shift+f12", lambda: None)
+    error = hotkey.register()
+    if error:
+        raise RuntimeError(error)
+    hotkey.unregister()
+    return "global shortcuts can be registered (no extra permission needed)"
+
+
+def check_mac_volume() -> str:
+    if platform.system() != "Darwin":
+        raise Skip("macOS only")
+    from vector.osutil import run
+
+    out = run(["osascript", "-e", "output volume of (get volume settings)"]).stdout.strip()
+    if not out.isdigit():
+        raise Skip(f"no speakers to control ({out or 'no answer'})")
+    original = int(out)
+    target = original - 1 if original > 5 else 5
+    try:
+        run(["osascript", "-e", f"set volume output volume {target}"])
+        now = run(["osascript", "-e", "output volume of (get volume settings)"]).stdout.strip()
+        assert now.isdigit() and abs(int(now) - target) <= 1, f"volume didn't change ({now})"
+    finally:
+        run(["osascript", "-e", f"set volume output volume {original}"])
+    return f"exact control works (left at {original}%)"
+
+
 def check_volume() -> str:
+    if platform.system() == "Darwin":
+        return check_mac_volume()
     if platform.system() != "Windows":
-        raise Skip("Windows only")
+        raise Skip("Windows and macOS only")
     from vector.skills.system import windows_endpoint_volume
 
     endpoint = windows_endpoint_volume()
@@ -198,7 +246,8 @@ def check_voice(interactive: bool) -> str:
             heard = engine.listen_for_command(stop=stop)
             timer.cancel()
         if heard is None:
-            raise RuntimeError("didn't hear \"Vector\" - check mic permissions (docs/windows.md)")
+            raise RuntimeError("didn't hear \"Vector\" - check mic permissions "
+                               f"({'docs/macos.md' if platform.system() == 'Darwin' else 'docs/windows.md'})")
         detail += f'; wake word OK, heard: "{heard}"'
     return detail
 
@@ -252,7 +301,8 @@ def run_selftest(config, interactive: bool = True) -> int:
         ("Long-term memory", check_memory),
         ("Clipboard", check_clipboard),
         ("Shell commands", check_shell),
-        ("Start menu apps", check_start_menu),
+        ("Applications" if platform.system() == "Darwin" else "Start menu apps", check_start_menu),
+        ("Global shortcut", check_mac_shortcut),
         ("Volume control", check_volume),
         ("Keyboard control", check_keyboard_control),
         ("AI brain connection", lambda: check_brain(config)),

@@ -1,4 +1,4 @@
-"""Drives the real summon bar with a fake brain. Needs a screen, so it runs on Windows CI."""
+"""Drives the real summon bar with a fake brain. Needs a screen, so it runs on Windows and macOS CI."""
 
 import os
 import sys
@@ -7,8 +7,8 @@ import time
 import pytest
 
 pytestmark = pytest.mark.skipif(
-    sys.platform != "win32" and not os.environ.get("VECTOR_UI_TESTS"),
-    reason="needs a desktop session (Windows CI, or set VECTOR_UI_TESTS=1 with a display)")
+    sys.platform not in ("win32", "darwin") and not os.environ.get("VECTOR_UI_TESTS"),
+    reason="needs a desktop session (Windows/macOS CI, or set VECTOR_UI_TESTS=1 with a display)")
 
 
 class FakeAgent:

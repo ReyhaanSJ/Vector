@@ -51,6 +51,38 @@ def windows_start_apps() -> tuple[tuple[str, str], ...]:
     return tuple((d["Name"], d["AppID"]) for d in data if d.get("Name") and d.get("AppID"))
 
 
+MAC_APP_FOLDERS = ("/Applications", "/System/Applications", "/System/Applications/Utilities",
+                   "/Applications/Utilities", str(Path.home() / "Applications"))
+
+
+def mac_apps(folders=MAC_APP_FOLDERS) -> tuple[tuple[str, str], ...]:
+    """Every .app in the usual macOS app folders as (name, path)."""
+    found: dict[str, str] = {}
+    for folder in folders:
+        try:
+            entries = sorted(Path(folder).iterdir())
+        except OSError:
+            continue
+        for entry in entries:
+            if entry.suffix == ".app" and entry.stem not in found:
+                found[entry.stem] = str(entry)
+    return tuple(found.items())
+
+
+def _open_mac_app(name: str, target: str) -> str:
+    match = best_app_match(target, mac_apps()) or best_app_match(name, mac_apps())
+    if match:
+        app_name, path = match
+        result = run(["open", path])
+        if result.returncode == 0:
+            return f"Opened {app_name}."
+        return f"Couldn't open {app_name} ({result.stderr.strip()})"
+    result = run(["open", "-a", target])  # apps somewhere unusual: let macOS look
+    if result.returncode == 0:
+        return f"Opened {name}."
+    return f"Couldn't find an app called '{name}' in Applications. Is it installed?"
+
+
 def best_app_match(query: str, apps) -> tuple[str, str] | None:
     """Pick the app whose name best matches what the user said."""
     q = query.lower().strip()
@@ -113,10 +145,8 @@ def open_app(name: str) -> str:
     target = APP_ALIASES.get(key, {}).get(_os_key(), name.strip())
     try:
         if IS_MAC:
-            result = run(["open", "-a", target])
-            if result.returncode != 0:
-                return f"Couldn't find an app called '{name}' ({result.stderr.strip()})"
-        elif IS_WINDOWS:
+            return _open_mac_app(name, target)
+        if IS_WINDOWS:
             return _open_windows_app(name, target)
         else:
             parts = target.split()

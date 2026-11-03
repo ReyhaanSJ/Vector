@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vector-assistant"
-version = "0.4.0"
+version = "0.4.1"
 description = "VECTOR - an open-source, JARVIS-style AI assistant that automates your laptop."
 readme = "README.md"
 license = { text = "MIT" }
@@ -14,7 +14,8 @@ keywords = ["assistant", "automation", "jarvis", "ai", "voice", "claude", "ollam
 classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",
-  "Operating System :: OS Independent",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: MacOS",
   "Topic :: Desktop Environment",
   "Topic :: Utilities",
 ]
@@ -31,10 +32,11 @@ voice = [
   "sounddevice>=0.4.6",
   "vosk>=0.3.45",
   "faster-whisper>=1.0",
-  "pyttsx3>=2.90; sys_platform != 'win32'",
+  "pyttsx3>=2.90; sys_platform == 'linux'",
 ]
 control = ["pyautogui>=0.9.54"]
-app = ["pystray>=0.19", "Pillow>=10", "pynput>=1.7; sys_platform != 'win32'"]
+# macOS needs neither pystray nor pynput: VECTOR uses the menu bar, the Dock and Carbon shortcuts.
+app = ["pystray>=0.19; sys_platform != 'darwin'", "Pillow>=10", "pynput>=1.7; sys_platform == 'linux'"]
 all = ["vector-assistant[voice,control,app]"]
 dev = ["pytest>=8", "ruff>=0.6", "numpy>=1.26"]
 
