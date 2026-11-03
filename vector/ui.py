@@ -612,7 +612,7 @@ class SummonBar:
         width = max(120, max(tkfont.Font(font=self.f_button).measure(t) for t in (yes, no)) + 36)
         Pill(self.confirm_buttons, yes, lambda: self._answer(True), self.f_button, fill=AMBER,
              fg=AMBER_BG, hover="#FFD27A", width=width, bg=AMBER_BG).pack(side="left")
-        Pill(self.confirm_buttons, no, lambda: self._answer(False), (self._ui_font, 10), fill=AMBER_BG,
+        Pill(self.confirm_buttons, no, lambda: self._answer(False), (self._ui_font, fsize(10)), fill=AMBER_BG,
              fg=AMBER_TEXT, hover="#2A2110", outline=AMBER_EDGE, width=width,
              bg=AMBER_BG).pack(side="left", padx=(8, 0))
 

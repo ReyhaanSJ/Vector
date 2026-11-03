@@ -166,6 +166,13 @@ jobs:
             ls -d /Applications/Ollama.app "$HOME/Applications/Ollama.app" 2>/dev/null | head -n 1 | grep -q Ollama
           fi
           "$HOME/.local/bin/vector" --selftest || true
+      - name: Typing reaches the summon bar with the installed Python (Tk 9)
+        if: matrix.ai == 'none'
+        timeout-minutes: 3
+        run: |
+          out=$("$HOME/Library/Application Support/VECTOR/.venv/bin/python" tests/mac_bisect.py)
+          echo "$out"
+          echo "$out" | grep -q "typed='hello'"
       - name: Open VECTOR from Applications and quit it
         run: |
           open "$HOME/Applications/VECTOR.app"

@@ -13,12 +13,20 @@ if "style" in flags:
     os.environ["VECTOR_MAC_STYLE"] = flags["style"]
 sys.path.insert(0, os.path.dirname(__file__))
 
-from test_app_ui import FakeAgent  # noqa: E402
-
 from vector import macos  # noqa: E402
 from vector.app import VectorApp, _windows_identity  # noqa: E402
 from vector.config import Config  # noqa: E402
 from vector.ui import MAC_TITLE  # noqa: E402
+
+
+class FakeAgent:
+    confirm = on_action = None
+
+    def cancel(self):
+        pass
+
+    def ask(self, text):
+        return f"Handled '{text}'"
 
 
 def watchdog():
