@@ -26,14 +26,14 @@ jobs:
       - run: ruff check .
       - run: pip install pillow
         if: runner.os != 'Linux'
-      - name: Typing reaches the summon bar on a real Mac (diagnostic)
+      - name: Typing reaches the summon bar on a real Mac
         if: runner.os == 'macOS'
-        timeout-minutes: 6
+        timeout-minutes: 4
         run: |
           pip install pyautogui
-          for combo in "style=plain:" "style=document:noTitleBar" "style=simple:" \
-                       "style=plain: focus=0" "style=plain: make_key=0"; do
-            python tests/mac_bisect.py $combo || true
+          for combo in "focus=1" "focus=0"; do
+            out=$(python tests/mac_typing_check.py $combo); echo "$out"
+            echo "$out" | grep -q "typed='hello'"
           done
       - run: pytest -q -o faulthandler_timeout=90
         timeout-minutes: 10
@@ -170,7 +170,7 @@ jobs:
         if: matrix.ai == 'none'
         timeout-minutes: 3
         run: |
-          out=$("$HOME/Library/Application Support/VECTOR/.venv/bin/python" tests/mac_bisect.py)
+          out=$("$HOME/Library/Application Support/VECTOR/.venv/bin/python" tests/mac_typing_check.py)
           echo "$out"
           echo "$out" | grep -q "typed='hello'"
       - name: Open VECTOR from Applications and quit it

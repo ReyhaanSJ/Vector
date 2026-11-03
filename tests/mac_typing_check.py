@@ -1,6 +1,7 @@
 """Checks, on a real Mac, that typing reaches the summon bar (run by CI on macOS).
+macOS never gives the keyboard to some kinds of borderless window, so this guards against that.
 
-    python tests/mac_bisect.py focus=1 make_key=1
+    python tests/mac_typing_check.py focus=1 make_key=1
 """
 import os
 import sys
