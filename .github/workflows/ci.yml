@@ -31,7 +31,8 @@ jobs:
         timeout-minutes: 6
         run: |
           pip install pyautogui
-          for combo in "focus=1 make_key=1" "focus=0 make_key=1" "focus=1 make_key=0" "focus=0 make_key=0"; do
+          for combo in "style=plain:" "style=document:noTitleBar" "style=simple:" \
+                       "style=plain: focus=0" "style=plain: make_key=0"; do
             python tests/mac_bisect.py $combo || true
           done
       - run: pytest -q -o faulthandler_timeout=90

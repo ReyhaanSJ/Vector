@@ -9,6 +9,8 @@ import time
 
 flags = dict(a.split("=") for a in sys.argv[1:])
 os.environ["VECTOR_MAC_MAKE_KEY"] = flags.get("make_key", "1")
+if "style" in flags:
+    os.environ["VECTOR_MAC_STYLE"] = flags["style"]
 sys.path.insert(0, os.path.dirname(__file__))
 
 from test_app_ui import FakeAgent  # noqa: E402

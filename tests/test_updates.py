@@ -110,8 +110,6 @@ def test_download_asks_github_for_the_normal_format(tmp_path, monkeypatch):
     assert seen["accept"] == "application/vnd.github+json"
 
 
-@pytest.mark.skipif(not __import__("os").environ.get("VECTOR_LIVE_UPDATE_TEST"),
-                    reason="needs network + GitHub access (CI sets VECTOR_LIVE_UPDATE_TEST)")
 def test_mac_and_windows_installers_are_found_by_name(tmp_path, monkeypatch):
     data = _zip({"v/install.sh": "#!/bin/bash", "v/install.ps1": "# ps"})
     monkeypatch.setattr(updater, "_request", lambda url, accept=None: _FakeResponse(data))
@@ -121,6 +119,8 @@ def test_mac_and_windows_installers_are_found_by_name(tmp_path, monkeypatch):
         assert (folder / name).exists()
 
 
+@pytest.mark.skipif(not __import__("os").environ.get("VECTOR_LIVE_UPDATE_TEST"),
+                    reason="needs network + GitHub access (CI sets VECTOR_LIVE_UPDATE_TEST)")
 def test_real_release_downloads(tmp_path):
     latest = updater.latest_release()
     assert latest is not None

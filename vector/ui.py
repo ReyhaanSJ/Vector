@@ -50,6 +50,20 @@ MONO_FONTS = ["Cascadia Mono", "Consolas", "SF Mono", "Menlo", "JetBrains Mono",
 MAC_TITLE = "VECTOR summon bar"
 
 
+def mac_borderless(win) -> str:
+    """macOS: a window with no title bar that can still receive the keyboard. (Tk's
+    overrideredirect windows never can on a Mac, so typing would go nowhere.)"""
+    style = os.environ.get("VECTOR_MAC_STYLE", "plain:")
+    window_class, _, attributes = style.partition(":")
+    try:
+        win.tk.call("::tk::unsupported::MacWindowStyle", "style", win._w, window_class,
+                    attributes.split(",") if attributes else "")
+        return style
+    except Exception:
+        win.overrideredirect(True)
+        return "overrideredirect"
+
+
 def fsize(points: int) -> int:
     """A font size that looks the same on Windows and macOS."""
     return round(points * FONT_SCALE)
@@ -184,7 +198,10 @@ class SummonBar:
 
         win = self.win = tk.Toplevel(root)
         win.withdraw()
-        win.overrideredirect(True)
+        if sys.platform == "darwin":
+            mac_borderless(win)  # borderless, but (unlike overrideredirect) it can take typing
+        else:
+            win.overrideredirect(True)
         win.attributes("-topmost", True)
         win.configure(bg=BG)
         win.title(MAC_TITLE)  # never shown; lets macOS find this window to round its corners
