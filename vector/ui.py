@@ -350,8 +350,12 @@ class SummonBar:
         if self._rounded or sys.platform not in ("win32", "darwin"):
             return
         if sys.platform == "darwin":
+            import os
+
             from vector.macos import round_window
 
+            if os.environ.get("VECTOR_MAC_ROUND") == "0":
+                return
             self.win.update_idletasks()
             self._rounded = round_window(MAC_TITLE, radius=14.0)
             if self._rounded:
@@ -444,9 +448,12 @@ class SummonBar:
         self._round_corners()
         if focus:
             if sys.platform == "darwin":
+                import os
+
                 from vector.macos import activate
 
-                activate()  # VECTOR becomes the active app, so typing goes to the bar
+                if os.environ.get("VECTOR_MAC_ACTIVATE") != "0":
+                    activate()  # VECTOR becomes the active app, so typing goes to the bar
             win.focus_force()
             self.entry.focus_set()
             if sys.platform == "win32":
