@@ -245,9 +245,13 @@ def page_mac_menu(p: Pen, hotkey: str):
     c = p.c
     round_rect(c, 30, 8, CW - 30, 38, 8, fill="#202830", outline="#202830")
     c.create_text(52, 23, text="\uf8ff", font=p.f["body"], fill=TEXT)  # Apple logo (Mac fonts)
+    from tkinter import font as tkfont
+
     c.create_text(76, 23, text="VECTOR", anchor="w", font=p.f["head"], fill=TEXT)
-    for i, word in enumerate(("Edit", "Window")):
-        c.create_text(170 + i * 60, 23, text=word, anchor="w", font=p.f["small"], fill=MUTED)
+    x = 76 + tkfont.Font(font=p.f["head"]).measure("VECTOR") + 22
+    for word in ("Edit", "Window"):
+        c.create_text(x, 23, text=word, anchor="w", font=p.f["small"], fill=MUTED)
+        x += tkfont.Font(font=p.f["small"]).measure(word) + 22
     c.create_text(CW - 50, 23, text="9:41", anchor="e", font=p.f["small"], fill=TEXT)
     menu = ["Open VECTOR", "Listen for \u201cVector\u201d", "Update to 0.4.1", "Guide", "Quit VECTOR  \u2318Q"]
     mx, my = 62, 44
@@ -274,8 +278,8 @@ def page_mac_allow(p: Pen, hotkey: str):
             ("Screen Recording", "to see your screen when you ask"),
             ("Accessibility", "to click and type for you")]
     x0, x1 = 90, CW - 90
-    round_rect(c, x0, 14, x1, 30 + 66 * len(rows), 14, fill=PANEL, outline=BORDER)
-    c.create_text(x0 + 20, 34, text="System Settings \u203a Privacy & Security", anchor="w",
+    round_rect(c, x0, 4, x1, 62 + 66 * len(rows), 14, fill=PANEL, outline=BORDER)
+    c.create_text(x0 + 20, 26, text="System Settings \u203a Privacy & Security", anchor="w",
                   font=p.f["small"], fill=MUTED)
     for i, (name, why) in enumerate(rows):
         y = 56 + i * 66

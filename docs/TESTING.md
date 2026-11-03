@@ -56,6 +56,20 @@ Type each of these and tick it off when it works:
 - [ ] Install an older version (`vector --update 0.2.0`), then tray icon → **Check for updates**
       offers the newest. **Update** reinstalls and reopens VECTOR with your settings kept.
 
+## 6. On a Mac
+
+- [ ] Paste the `curl ... install.sh | bash` command into Terminal; VECTOR appears in Applications
+- [ ] Open VECTOR from Spotlight: the guide shows the menu-bar and "Allow VECTOR" pages
+- [ ] **Control+Shift+Space** from another app opens the bar, and typing goes straight into it
+- [ ] The bar has rounded corners; text isn't tiny or blurry on a Retina screen
+- [ ] Clicking VECTOR in the Dock opens the bar; the VECTOR menu (top left) has Listen, Guide, Quit
+- [ ] Voice: macOS asks for the Microphone; "Vector, what time is it?" works and is spoken back
+- [ ] "What's on my screen?": macOS asks for Screen Recording; after allowing, it sees real windows
+- [ ] "Click the Apple menu": macOS asks for Accessibility; the click lands in the right place
+- [ ] "Turn on dark mode" works (macOS asks to let VECTOR control System Events)
+- [ ] Log out and in: VECTOR starts by itself (if you said yes to starting at login)
+- [ ] `/uninstall`: VECTOR, its login item and `vector` command are gone; data kept if you chose that
+
 ## Ready to launch when
 
 - the self-test passes,
