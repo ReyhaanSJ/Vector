@@ -27,7 +27,9 @@ SYSTEM_PROMPT = """\
 You are VECTOR, a personal AI assistant that runs on {user}'s computer and can control it \
 through the tools provided - in the spirit of a capable, loyal, slightly witty AI butler.
 
-Computer: {os} | Home folder: {home} | Shell: {shell} | Now: {now}
+Computer: {os} | Home folder: {home} | Shell: {shell}
+Each request starts with a [Context: ...] line giving the current date and time; it comes \
+from VECTOR, not from the user.
 
 How to behave:
 - Act, don't just describe: when asked to do something on the computer, use the tools to do it.
@@ -77,6 +79,8 @@ class Vector:
         self.registry = registry or REGISTRY
         self._cancel = threading.Event()
         self._screen_ok = False
+        self._system: str | None = None
+        self._memory_seen: str | None = None
         if registry is None:
             load_builtin_skills()
             user_dirs = [config.home / "skills", *map(Path, config.skill_dirs)]
@@ -84,17 +88,34 @@ class Vector:
                 load_skill_dir(directory)
 
     def system_prompt(self) -> str:
+        """The instructions for the AI. They stay exactly the same for a whole conversation:
+        Claude's saved reasoning is tied to them, and changing them mid-chat makes Claude reject
+        the request. (It also keeps the prompt cache warm.) Things that change - the time, what
+        VECTOR remembers - travel with each request instead (see request_context)."""
+        if self._system is None:
+            from vector.skills.productivity import memory_summary
+
+            self._memory_seen = memory_summary() or "(nothing yet)"
+            self._system = SYSTEM_PROMPT.format(
+                user=self.config.user_name,
+                os=_os_name(),
+                shell="PowerShell" if platform.system() == "Windows" else "sh/bash",
+                home=Path.home(),
+                memory=self._memory_seen,
+            )
+        return self._system
+
+    def request_context(self) -> str:
+        """A short line sent with each request: the time now, and memory if it changed."""
         from vector.skills.productivity import memory_summary
 
-        return SYSTEM_PROMPT.format(
-            user=self.config.user_name,
-            os=_os_name(),
-            shell="PowerShell" if platform.system() == "Windows" else "sh/bash",
-            home=Path.home(),
-            # Date + hour only, so the prompt stays stable (cacheable) within the hour.
-            now=dt.datetime.now().strftime("%A %d %B %Y, around %I %p"),
-            memory=memory_summary() or "(nothing yet)",
-        )
+        now = dt.datetime.now().strftime("%A %d %B %Y, %I:%M %p").replace(" 0", " ")
+        parts = [f"it is {now}"]
+        memory = memory_summary() or "(nothing yet)"
+        if self._memory_seen is not None and memory != self._memory_seen:
+            parts.append(f"what you remember about {self.config.user_name} is now: {memory}")
+            self._memory_seen = memory
+        return "[Context: " + "; ".join(parts) + "]"
 
     def cancel(self) -> None:
         """Stop the current request: no further skills run and its reply is dropped."""
@@ -145,10 +166,13 @@ class Vector:
 
         self._cancel.clear()
         self._screen_ok = False  # the screen OK lasts for one request
-        reply = self.brain.respond(text, self.system_prompt(), self.registry.all(), self.execute)
+        system = self.system_prompt()
+        request = f"{self.request_context()}\n{text}"
+        reply = self.brain.respond(request, system, self.registry.all(), self.execute)
         if self._cancel.is_set():  # stopped while the AI was still answering
             raise Cancelled()
         return reply
 
     def reset(self) -> None:
         self.brain.reset()
+        self._system = None  # a fresh conversation picks up new settings and memory

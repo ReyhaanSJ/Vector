@@ -71,7 +71,7 @@ def test_claude_tool_loop():
 
     first, second = fake.requests
     assert first["model"] == "claude-opus-5-5"
-    assert first["fallbacks"] == "default" and first["betas"] == ["server-side-fallback-2026-07-01"]
+    assert first["fallbacks"] == "default" and "server-side-fallback-2026-07-01" in first["betas"]
     assert first["output_config"] == {"effort": "low"}
     assert {t["name"] for t in first["tools"]} == {"greet", "wipe"}
     assert "VECTOR" in first["system"] and "Tester" in first["system"]
@@ -393,3 +393,66 @@ def test_screenshots_reach_openrouter_and_ollama():
     text_only.ask("look")
     msg = ollama_sent[1]["messages"][-1]
     assert "can't see pictures" in msg["content"] and "images" not in msg
+
+
+def test_system_prompt_stays_the_same_for_a_whole_chat(monkeypatch):
+    """Claude ties its thinking to the system prompt; changing it mid-chat gets a 400."""
+    import datetime as dt
+
+    from vector import agent as agent_module
+    from vector.skills import productivity
+
+    fake = FakeClaude([NS(stop_reason="end_turn", content=[text("one")]),
+                       NS(stop_reason="end_turn", content=[text("two")])])
+    v = make_vector(ClaudeBrain(client=fake))
+    clock = [dt.datetime(2026, 11, 3, 9, 59)]
+
+    class Clock(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return clock[0]
+
+    monkeypatch.setattr(agent_module.dt, "datetime", Clock)
+    v.ask("hi")
+    productivity.remember("favourite editor is VS Code")   # memory changes mid-chat
+    clock[0] = dt.datetime(2026, 11, 3, 10, 5)             # and the hour changes
+    v.ask("again")
+    first, second = fake.requests
+    assert first["system"] == second["system"]
+    assert "9:59 AM" in first["messages"][0]["content"]
+    assert second["messages"][-1]["content"].startswith("[Context: it is Tuesday 3 November 2026, 10:05 AM")
+    assert "VS Code" in second["messages"][-1]["content"]
+
+
+def test_old_thinking_is_dropped_not_fatal():
+    import anthropic
+    import httpx2
+
+    brain = ClaudeBrain(model="claude-opus-5-5", client=FakeClaude([]))
+    params = brain._request("sys", [])
+    assert params["thinking"]["block_binding"] == {"prefix_mismatch_behavior": "drop_block"}
+    assert "thinking-binding-controls-2026-08-01" in params["betas"]
+    old = ClaudeBrain(model="claude-haiku-4-5", client=FakeClaude([]))._request("sys", [])
+    assert "thinking" not in old  # older models don't take adaptive thinking
+
+    # If Claude still rejects old thinking, VECTOR forgets that thinking and tries once more.
+    request = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+    error = anthropic.BadRequestError(
+        "messages.1.content.0: Invalid `signature` in `thinking` block. The block is bound to a "
+        "different conversation.", response=httpx2.Response(400, request=request), body=None)
+    fake = FakeClaude([NS(stop_reason="end_turn", content=[text("fine")])])
+    seen = []
+
+    def create(**params):
+        seen.append([m["content"] for m in params["messages"]])
+        if len(seen) == 1:
+            raise error
+        return fake.responses.pop(0)
+
+    fake.beta.messages.create = create
+    brain = ClaudeBrain(client=fake)
+    brain.messages = [{"role": "user", "content": "hi"},
+                      {"role": "assistant", "content": [NS(type="thinking", thinking=""),
+                                                        text("hello")]}]
+    assert brain.respond("more", "sys", [], lambda n, a: ("", False)) == "fine"
+    assert [b.type for b in seen[1][1]] == ["text"]
