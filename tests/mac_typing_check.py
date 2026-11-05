@@ -64,5 +64,10 @@ pump(0.8)
 pyautogui.write("again", interval=0.03)
 pump(0.8)
 again = app.bar.entry.get()
-print(f"RESULT {flags} typed={typed!r} second={again!r} window={state}", flush=True)
+mask = macos.window_mask(MAC_TITLE)
+titled = bool(mask and mask & 1)
+print(f"RESULT {flags} typed={typed!r} second={again!r} window={state} mask={mask} "
+      f"title_bar={titled} tk={app.root.tk.call('info', 'patchlevel')}", flush=True)
+if titled:
+    print("FAIL: the summon bar has a title bar", flush=True)
 os._exit(0)

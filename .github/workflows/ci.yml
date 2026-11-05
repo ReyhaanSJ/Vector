@@ -34,6 +34,7 @@ jobs:
           for combo in "focus=1" "focus=0"; do
             out=$(python tests/mac_typing_check.py $combo); echo "$out"
             echo "$out" | grep -q "typed='hello'"
+            echo "$out" | grep -q "title_bar=False"
           done
       - run: pytest -q -o faulthandler_timeout=90
         timeout-minutes: 10
@@ -173,13 +174,14 @@ jobs:
           out=$("$HOME/Library/Application Support/VECTOR/.venv/bin/python" tests/mac_typing_check.py)
           echo "$out"
           echo "$out" | grep -q "typed='hello'"
+          echo "$out" | grep -q "title_bar=False"
       - name: Summon bar has no title bar with the installed Tk (diagnostic)
         if: matrix.ai == 'none'
         timeout-minutes: 4
         continue-on-error: true
         run: |
           for a in plain plain+mask document simple; do
-            "$HOME/Library/Application Support/VECTOR/.venv/bin/python" tests/mac_style_probe.py $a || true
+            "$HOME/Library/Application Support/VECTOR/.venv/bin/python" tests/mac_style_probe.py $a 2>&1 | cut -c1-400 || true
           done
       - name: Open VECTOR from Applications and quit it
         run: |

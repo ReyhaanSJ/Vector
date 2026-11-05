@@ -3,12 +3,16 @@
 Prints, for each approach: is there a title bar, can you type into the bar, and a picture.
 """
 import base64
+import faulthandler
 import io
 import os
 import sys
 import time
+import traceback
 
+faulthandler.enable()
 approach = sys.argv[1]
+print(f"PROBE-START {approach}", flush=True)
 os.environ["VECTOR_MAC_STYLE"] = {"plain": "plain:", "document": "document:noTitleBar",
                                   "plain+mask": "plain:", "simple": "simple:"}.get(approach, "plain:")
 os.environ["VECTOR_MAC_NOMASK"] = "0" if approach.endswith("+mask") else "1"
@@ -41,8 +45,13 @@ def pump(seconds):
         time.sleep(0.02)
 
 
-app.bar.show()
-pump(1.0)
+try:
+    app.bar.show()
+    pump(1.0)
+except Exception:
+    traceback.print_exc()
+    sys.stdout.flush()
+    os._exit(1)
 mask = macos.window_mask(MAC_TITLE)
 import pyautogui  # noqa: E402
 
@@ -62,6 +71,7 @@ buf = io.BytesIO()
 img.save(buf, "JPEG", quality=70)
 print(f"PROBE {approach} tk={app.root.tk.call('info', 'patchlevel')} mask={mask} "
       f"titled={bool(mask and mask & 1)} typed={app.bar.entry.get()!r} "
-      f"geometry={w.winfo_rootx()},{w.winfo_rooty()} {w.winfo_width()}x{w.winfo_height()}")
-print(f"IMAGE probe-{approach} {base64.b64encode(buf.getvalue()).decode()}")
+      f"geometry={w.winfo_rootx()},{w.winfo_rooty()} {w.winfo_width()}x{w.winfo_height()}",
+      flush=True)
+print(f"IMAGE probe-{approach} {base64.b64encode(buf.getvalue()).decode()}", flush=True)
 os._exit(0)
