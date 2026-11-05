@@ -56,3 +56,40 @@ def test_describe_model():
     assert describe_model("openrouter", "auto:free") == "Free cloud AI (auto)"
     assert describe_model("openrouter", "google/gemma-4-31b-it:free") == "gemma-4-31b-it (free cloud)"
     assert describe_model("ollama", "qwen2.5:7b") == "qwen2.5:7b (local)"
+
+
+def test_pasted_keys_are_cleaned_and_checked():
+    from vector import keys
+
+    assert keys.clean('  "sk-or-v1-abc"\n') == "sk-or-v1-abc"
+    assert keys.wrong_kind("openrouter", "sk-or-v1-abc") is None
+    assert "Claude" in keys.wrong_kind("openrouter", "sk-ant-api03-xyz")
+    assert "OpenRouter" in keys.wrong_kind("claude", "sk-or-v1-abc")
+    assert "start with sk-or-" in keys.wrong_kind("openrouter", "hello")
+
+
+def test_openrouter_401_says_how_to_fix_it():
+    import io
+    import urllib.error
+
+    from vector.brain import BrainError
+    from vector.brain.openai_compat import OpenAICompatBrain
+
+    brain = OpenAICompatBrain(model="x:free", api_key=' "sk-ant-oops" ')
+    assert brain.api_key == "sk-ant-oops"
+
+    def refuse(*a, **k):
+        raise urllib.error.HTTPError("u", 401, "no", {}, io.BytesIO(b"{}"))
+
+    import urllib.request
+
+    original = urllib.request.urlopen
+    urllib.request.urlopen = refuse
+    try:
+        try:
+            brain._http_post({})
+        except BrainError as exc:
+            message = str(exc)
+    finally:
+        urllib.request.urlopen = original
+    assert "Claude (Anthropic) key" in message and "vector --set-key openrouter" in message

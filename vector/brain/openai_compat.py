@@ -81,7 +81,9 @@ class OpenAICompatBrain(Brain):
         self.model = model or AUTO_FREE
         self._fetch = fetch
         self.base_url = base_url.rstrip("/")
-        self.api_key = api_key if api_key is not None else os.environ.get("OPENROUTER_API_KEY", "")
+        from vector.keys import clean
+
+        self.api_key = clean(api_key if api_key is not None else os.environ.get("OPENROUTER_API_KEY", ""))
         self.messages: list[dict] = []
         self._post = post or self._http_post
 
@@ -91,7 +93,7 @@ class OpenAICompatBrain(Brain):
     def _http_post(self, payload: dict) -> dict:
         if not self.api_key:
             raise BrainError("OpenRouter needs a free API key: make one at https://openrouter.ai/keys, "
-                             "then set OPENROUTER_API_KEY (or run VECTOR's setup again).")
+                             "then run  vector --set-key openrouter  and paste it.")
         req = urllib.request.Request(
             f"{self.base_url}/chat/completions",
             data=json.dumps(payload).encode(),
@@ -108,7 +110,11 @@ class OpenAICompatBrain(Brain):
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode(errors="replace")[:300]
             if exc.code == 401:
-                raise BrainError("OpenRouter rejected the API key. Check OPENROUTER_API_KEY.") from exc
+                from vector.keys import wrong_kind
+
+                why = wrong_kind("openrouter", self.api_key) or "It may have been deleted or copied wrong."
+                raise BrainError(f"OpenRouter rejected the API key. {why} Paste a new one: run  "
+                                 "vector --set-key openrouter  then reopen VECTOR.") from exc
             if exc.code == 402:
                 raise BrainError("That OpenRouter model isn't free. See the free ones with "
                                  "vector --models") from exc

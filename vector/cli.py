@@ -8,6 +8,7 @@
     vector --selftest           check that everything works on this computer
     vector --app                background app: summon bar + say "Vector, ..." anywhere
     vector --startup on         start the VECTOR app when you log in (Windows and macOS)
+    vector --set-key openrouter paste a new OpenRouter (or: claude) key; it's checked, then saved
 """
 
 from __future__ import annotations
@@ -123,6 +124,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--versions", action="store_true", help="list every VECTOR version")
     p.add_argument("--models", action="store_true", help="list the AI models you can use right now")
     p.add_argument("--guide", action="store_true", help="show the illustrated guide")
+    p.add_argument("--set-key", metavar="AI", choices=["openrouter", "claude", "anthropic"],
+                   help="paste a new API key for openrouter or claude: it's checked, then saved")
     p.add_argument("--uninstall", action="store_true", help="remove VECTOR (you can keep your data)")
     p.add_argument("--set", metavar="KEY=VALUE", action="append",
                    help="save a setting, e.g. --set model=qwen2.5:7b or --set user_name=Ray")
@@ -193,6 +196,9 @@ def main(argv: list[str] | None = None) -> int:
 
         return guide_main()
 
+    if args.set_key:
+        return set_key(args.set_key)
+
     if args.uninstall:
         return uninstall_from_terminal()
 
@@ -245,6 +251,45 @@ def main(argv: list[str] | None = None) -> int:
     if args.voice:
         return voice_loop(vector)
     return text_loop(vector)
+
+
+def set_key(provider: str) -> int:
+    """Paste a key; check it with the AI service; save it where VECTOR's app finds it."""
+    import getpass
+
+    from vector import keys
+    from vector.config import set_config_value
+
+    name, _, where = keys.PROVIDERS[provider]
+    say(f"Get a key at {where}.")
+    try:
+        key = keys.clean(getpass.getpass("Paste your key (it stays hidden), then press Enter: "))
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return 1
+    if not key:
+        error("No key pasted. Nothing changed.")
+        return 1
+    warning = keys.wrong_kind("claude" if provider == "anthropic" else provider, key)
+    if warning:
+        error(warning)
+    check = keys.check_openrouter if provider == "openrouter" else keys.check_claude
+    ok, info = check(key)
+    if ok is False:
+        error(info + " Nothing was saved. Copy the key again and retry.")
+        return 1
+    if ok is None:
+        say(f"Couldn't check the key right now ({info}); saving it anyway.")
+    try:
+        place = keys.save(name, key)
+    except Exception as exc:
+        error(str(exc))
+        return 1
+    set_config_value("provider", "openrouter" if provider == "openrouter" else "anthropic")
+    say(f"Key works and is saved in {place}. VECTOR now uses "
+        f"{'OpenRouter' if provider == 'openrouter' else 'Claude'}.")
+    say("Quit VECTOR and open it again so it picks up the new key.")
+    return 0
 
 
 def set_startup(mode: str) -> int:

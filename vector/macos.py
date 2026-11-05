@@ -72,7 +72,7 @@ def load_keys() -> list[str]:
         return loaded
     for name in KEY_NAMES:
         if not os.environ.get(name):
-            value = keychain_get(name)
+            value = keychain_get(name).strip().strip("\"'").strip()
             if value:
                 os.environ[name] = value
                 loaded.append(name)
@@ -359,3 +359,35 @@ def window_state(title: str) -> dict:
             "can_be_key": bool(_send(window, "canBecomeKeyWindow", restype=ctypes.c_bool)),
             "is_key": bool(_send(window, "isKeyWindow", restype=ctypes.c_bool)),
             "app_active": bool(_send(_ns_app(), "isActive", restype=ctypes.c_bool))}
+
+
+# Style mask bits (NSWindowStyleMask): titled, closable, miniaturizable, resizable.
+_TITLED_BITS = 1 | 2 | 4 | 8
+
+
+def window_mask(title: str) -> int | None:
+    if not IS_MAC:
+        return None
+    window = _find_window(title)
+    if not window:
+        return None
+    return int(_send(window, "styleMask", restype=ctypes.c_ulong))
+
+
+def remove_title_bar(title: str) -> bool:
+    """Take the title bar (and its three buttons) off a window that Tk gave one. Newer Tk
+    versions (9.0) keep the title bar for "plain" windows, which the summon bar must not have."""
+    if not IS_MAC:
+        return False
+    try:
+        window = _find_window(title)
+        if not window:
+            return False
+        mask = int(_send(window, "styleMask", restype=ctypes.c_ulong))
+        if not mask & 1:
+            return True  # already borderless
+        _send(window, "setStyleMask:", mask & ~_TITLED_BITS, restype=None,
+              argtypes=(ctypes.c_ulong,))
+        return not int(_send(window, "styleMask", restype=ctypes.c_ulong)) & 1
+    except Exception:
+        return False

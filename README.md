@@ -376,7 +376,7 @@ shortcut, screen) are covered in [docs/macos.md](docs/macos.md#troubleshooting).
 | "Can't reach the free local AI" | Start the **Ollama** app from the Start Menu. |
 | "Ollama doesn't have 'model'" | Run `ollama pull <model name>` with the name it shows. |
 | "The free model is busy" / "daily limit" | Free cloud models are shared. Wait, or switch: `vector --set provider=ollama`. |
-| "Claude needs an API key" | `setx ANTHROPIC_API_KEY "sk-ant-..."`, then restart VECTOR. |
+| "Claude needs an API key" / "rejected the API key" | Run `vector --set-key claude` (or `vector --set-key openrouter`) and paste the key. It's checked first, then saved. Restart VECTOR. |
 | Clicks land in the wrong place | Tell us your display scaling (Settings → Display) in an issue. |
 | Blank or old icon | Restart the laptop to refresh Windows' icon cache; re-pin if you'd pinned VECTOR. |
 | Voice failed to install | Run setup again (it uses its own Python 3.13 for voice). |

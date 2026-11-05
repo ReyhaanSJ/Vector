@@ -64,7 +64,6 @@ ask() {  # ask "Question" default(y/n) -> exit status 0 = yes
     [ "$answer" = "y" ] || [ "$answer" = "yes" ]
 }
 read_line() { local answer; IFS= read -r answer < "$TTY" || answer=""; printf '%s' "$answer"; }
-read_secret() { local answer; IFS= read -rs answer < "$TTY" || answer=""; printf '\n' > "$TTY"; printf '%s' "$answer"; }
 
 [ "$(uname -s)" = "Darwin" ] || fail "this installer is for macOS. On Windows, use 'Install VECTOR.bat'."
 
@@ -165,13 +164,6 @@ step 4 "Choosing VECTOR's AI brain"
 UPDATING=0
 if [ "${VECTOR_INSTALL_KEEP_SETTINGS:-}" = "1" ] && [ -f "$HOME/.vector/config.toml" ]; then UPDATING=1; fi
 keychain_has() { security find-generic-password -s VECTOR -a "$1" >/dev/null 2>&1; }
-save_key() {
-    if security add-generic-password -U -s VECTOR -a "$1" -l "VECTOR $1" -w "$2" >/dev/null 2>&1; then
-        good "Key saved in your Mac's Keychain (only VECTOR uses it)."
-    else
-        warn "Couldn't save the key in the Keychain. Run this setup again to retry."
-    fi
-}
 HAS_CLAUDE=0; { [ -n "${ANTHROPIC_API_KEY:-}" ] || keychain_has ANTHROPIC_API_KEY; } && HAS_CLAUDE=1
 HAS_OPENROUTER=0; { [ -n "${OPENROUTER_API_KEY:-}" ] || keychain_has OPENROUTER_API_KEY; } && HAS_OPENROUTER=1
 
@@ -254,19 +246,15 @@ ollama)
 openrouter)
     if [ "$HAS_OPENROUTER" = "0" ] && [ "$AUTO" = "0" ]; then
         say "1. Sign up free at https://openrouter.ai"
-        say "2. Make a key at https://openrouter.ai/keys"
-        printf '3. Paste the key here (it stays hidden): '
-        KEY=$(read_secret)
-        [ -n "$KEY" ] && save_key OPENROUTER_API_KEY "$KEY"
+        say "2. Make a key at https://openrouter.ai/keys, then paste it below."
+        # Checks the key with OpenRouter before saving it in the Keychain.
+        "$PY" -m vector --set-key openrouter < "$TTY" || warn "Run  vector --set-key openrouter  later to add it."
     fi
     "$PY" -m vector --set provider=openrouter --set "model=auto:free" >/dev/null
     ;;
 claude)
     if [ "$HAS_CLAUDE" = "0" ] && [ "$AUTO" = "0" ]; then
-        say "Get a key at https://console.anthropic.com (API keys page)."
-        printf 'Paste your API key (it stays hidden): '
-        KEY=$(read_secret)
-        [ -n "$KEY" ] && save_key ANTHROPIC_API_KEY "$KEY"
+        "$PY" -m vector --set-key claude < "$TTY" || warn "Run  vector --set-key claude  later to add it."
     fi
     "$PY" -m vector --set provider=anthropic --set model= >/dev/null
     ;;

@@ -146,7 +146,7 @@ $Updating = ($env:VECTOR_INSTALL_KEEP_SETTINGS -eq "1") -and (Test-Path (Join-Pa
 function Read-Secret([string]$Prompt) {
     $secure = Read-Host $Prompt -AsSecureString
     $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
-    try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr).Trim() }
+    try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr).Trim().Trim('"', "'").Trim() }
     finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
 }
 function Save-Key([string]$Name, [string]$Value) {

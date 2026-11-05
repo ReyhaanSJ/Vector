@@ -90,8 +90,8 @@ class ClaudeBrain(Brain):
         import anthropic
 
         no_key = (
-            "Claude needs an API key. Set ANTHROPIC_API_KEY (get one at "
-            "https://console.anthropic.com) or use the free local option: --provider ollama"
+            "Claude needs an API key: get one at https://console.anthropic.com, then run  "
+            "vector --set-key claude  and paste it (or use the free local AI: --provider ollama)"
         )
         try:
             return self.client.beta.messages.create(**params)

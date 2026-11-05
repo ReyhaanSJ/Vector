@@ -368,8 +368,11 @@ class SummonBar:
         if self._rounded or sys.platform not in ("win32", "darwin"):
             return
         if sys.platform == "darwin":
-            from vector.macos import round_window
+            from vector.macos import remove_title_bar, round_window
 
+            if os.environ.get("VECTOR_MAC_NOMASK") != "1":
+                self.win.update_idletasks()
+                remove_title_bar(MAC_TITLE)  # Tk 9 keeps a title bar on "plain" windows
             if os.environ.get("VECTOR_MAC_ROUND") == "0":
                 return
             self.win.update_idletasks()

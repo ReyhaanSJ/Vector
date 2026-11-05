@@ -99,4 +99,5 @@ its Python and login item. Ollama is a separate app: drag it to the Bin if you d
 | Clicks or typing do nothing | Turn on **Accessibility** for VECTOR, then reopen VECTOR. |
 | Voice never hears "Vector" | Turn on **Microphone** for VECTOR; check the right mic is chosen in System Settings → Sound → Input. |
 | Text looks too small or too big | Tell us in an issue with a screenshot (and your Mac model), so we can tune it. |
+| "OpenRouter rejected the API key" (or Claude) | Run `vector --set-key openrouter` (or `vector --set-key claude`) in Terminal and paste the key again. It's checked before it's saved. Then quit and reopen VECTOR. |
 | Anything else | Run `vector --selftest` in Terminal and paste the report in an issue. |
