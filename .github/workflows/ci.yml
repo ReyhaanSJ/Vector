@@ -175,14 +175,6 @@ jobs:
           echo "$out"
           echo "$out" | grep -q "typed='hello'"
           echo "$out" | grep -q "title_bar=False"
-      - name: Summon bar has no title bar with the installed Tk (diagnostic)
-        if: matrix.ai == 'none'
-        timeout-minutes: 4
-        continue-on-error: true
-        run: |
-          for a in plain plain+mask document simple; do
-            "$HOME/Library/Application Support/VECTOR/.venv/bin/python" tests/mac_style_probe.py $a 2>&1 | cut -c1-400 || true
-          done
       - name: Open VECTOR from Applications and quit it
         run: |
           open "$HOME/Applications/VECTOR.app"
