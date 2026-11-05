@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vector-assistant"
-version = "0.4.2"
+version = "0.5.0"
 description = "VECTOR - an open-source, JARVIS-style AI assistant that automates your laptop."
 readme = "README.md"
 license = { text = "MIT" }
@@ -37,9 +37,10 @@ voice = [
 ]
 control = ["pyautogui>=0.9.54"]
 # macOS needs neither pystray nor pynput: VECTOR uses the menu bar, the Dock and Carbon shortcuts.
-app = ["pystray>=0.19; sys_platform != 'darwin'", "Pillow>=10", "pynput>=1.7; sys_platform == 'linux'"]
+app = ["pystray>=0.19; sys_platform != 'darwin'", "Pillow>=10", "pynput>=1.7; sys_platform == 'linux'",
+       "segno>=1.6"]  # segno: the QR code for pairing a phone (VECTOR Remote)
 all = ["vector-assistant[voice,control,app]"]
-dev = ["pytest>=8", "ruff>=0.6", "numpy>=1.26"]
+dev = ["pytest>=8", "ruff>=0.6", "numpy>=1.26", "segno>=1.6"]
 
 [project.scripts]
 vector = "vector.cli:main"

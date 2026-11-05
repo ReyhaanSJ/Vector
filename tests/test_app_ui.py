@@ -300,3 +300,64 @@ def test_terminal_commands_work_in_the_bar(tmp_path, monkeypatch):
         assert quits.count(True) == 2
     finally:
         close(app, real_quit)
+
+
+def test_requests_from_the_phone_are_answered_on_the_phone():
+    app = make_app()
+    state = app.remote_bridge.state
+    try:
+        app.submit_remote("close calculator")
+        pump(app, 1.0)
+        assert state.busy and state.confirm is not None       # Allow / Deny is on the phone...
+        assert not app.bar.visible() and app.bar._confirm_cb is None   # ...not on the computer
+        assert state.steps == ["Open app: calculator"]
+        assert state.answer(True)
+        pump(app, 1.0)
+        assert not state.busy and "close allowed: True" in state.reply
+        assert not app.bar.visible()                           # the computer's screen is untouched
+        app.submit_typed("hello")                              # typed on the computer: the phone sees it too
+        pump(app, 1.0)
+        assert state.request == "hello" and state.confirm is not None and app.bar._confirm_cb
+        app.bar._answer(False)
+        pump(app, 1.0)
+        assert "close allowed: False" in state.reply
+    finally:
+        close(app)
+
+
+def test_phone_pairing_window(tmp_path, monkeypatch):
+    from vector import remote
+
+    monkeypatch.setattr(remote, "STATE_FILE", tmp_path / "remote.json")
+    monkeypatch.setattr(remote, "PORT", 0)
+    app = make_app()
+    try:
+        _type(app, "/phone")
+        pump(app, 0.5)
+        assert app.remote is not None and app.remote.running and app._pairing is not None
+        assert app.remote.key in app._pairing.link.get()
+        _screenshot_window(app._pairing.win, "phone-pairing.png")
+        old = app.remote.key
+        _type(app, "/phone reset")
+        pump(app, 0.3)
+        assert app.remote.key != old                           # old phones are unpaired
+        _type(app, "/phone off")
+        pump(app, 0.3)
+        assert app.remote is None and app._pairing is None
+    finally:
+        close(app)
+
+
+def _screenshot_window(win, name):
+    import os
+
+    folder = os.environ.get("VECTOR_SCREENSHOTS")
+    if not folder:
+        return
+    from PIL import ImageGrab
+
+    win.update()
+    x, y = win.winfo_rootx(), win.winfo_rooty()
+    os.makedirs(folder, exist_ok=True)
+    ImageGrab.grab(bbox=(x, y, x + win.winfo_width(), y + win.winfo_height())).save(
+        os.path.join(folder, name))

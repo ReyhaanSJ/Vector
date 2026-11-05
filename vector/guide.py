@@ -229,7 +229,7 @@ def page_tray(p: Pen, hotkey: str):
     tx = CW - 170
     c.create_oval(tx, 212, tx + 26, 238, fill=BG, outline=ACCENT, width=2)
     draw_mark(c, tx + 6, 217, 14, width=2)
-    menu = ["Open VECTOR", "Listen for “Vector”", "Update to 0.4.0", "Guide", "Quit VECTOR"]
+    menu = ["Open VECTOR", "Listen for “Vector”", "Update to 0.5.0", "Guide", "Quit VECTOR"]
     mx, my = tx - 140, 18
     round_rect(c, mx, my, mx + 190, my + 30 * len(menu) + 14, 10, fill=PANEL, outline=BORDER)
     for i, item in enumerate(menu):
@@ -253,7 +253,7 @@ def page_mac_menu(p: Pen, hotkey: str):
         c.create_text(x, 23, text=word, anchor="w", font=p.f["small"], fill=MUTED)
         x += tkfont.Font(font=p.f["small"]).measure(word) + 22
     c.create_text(CW - 50, 23, text="9:41", anchor="e", font=p.f["small"], fill=TEXT)
-    menu = ["Open VECTOR", "Listen for \u201cVector\u201d", "Update to 0.4.1", "Guide", "Quit VECTOR  \u2318Q"]
+    menu = ["Open VECTOR", "Listen for \u201cVector\u201d", "Update to 0.5.0", "Guide", "Quit VECTOR  \u2318Q"]
     mx, my = 62, 44
     round_rect(c, mx, my, mx + 210, my + 26 * len(menu) + 12, 10, fill=PANEL, outline=BORDER)
     for i, item in enumerate(menu):

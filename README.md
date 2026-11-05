@@ -15,6 +15,10 @@ Windows 10 / 11 &nbsp;·&nbsp; macOS 11+ &nbsp;·&nbsp; Claude, free cloud AI or
 > edges. If something breaks, please [open an issue](https://github.com/ReyhaanSJ/Vector/issues)
 > with what you did and a screenshot. Running `vector --selftest` and pasting its report helps a lot.
 
+> **New in 0.5.0: VECTOR Remote.** Use VECTOR from your iPhone or Android phone: see your
+> computer's screen live, tap to click, type, and ask VECTOR things. Type `/phone` in the bar to
+> pair your phone. See [Your phone](#69-your-phone-vector-remote).
+
 > **New in 0.4.1: VECTOR for Mac.** Everything works on macOS too (Apple silicon and Intel).
 > It's brand new, so Mac bug reports are extra welcome. See [Mac: one command](#mac-one-command).
 
@@ -59,6 +63,7 @@ Windows 10 / 11 &nbsp;·&nbsp; macOS 11+ &nbsp;·&nbsp; Claude, free cloud AI or
 | **Use the internet** | Searches the web and reads pages itself; downloads files when asked. |
 | **Remember you** | "Remember my project folder is D:\robot" and it'll know next time. |
 | **Stay safe** | Risky actions show **Allow / Deny** first. **Esc** stops anything instantly. |
+| **Use it from your phone** | See your screen live on your iPhone or Android, tap to click, and ask VECTOR things (`/phone`). |
 | **Keep itself updated** | New versions are offered from the tray icon (Mac: the menu bar). |
 | **Your choice of AI** | Claude (best), free cloud models, or a free AI that runs entirely on your laptop. |
 
@@ -248,6 +253,7 @@ came from. Downloads ask first.
 | `/model` | Shows which AI is answering |
 | `/aloud` | Read replies out loud on/off (same as the speaker button) |
 | `/reset` | Starts a fresh conversation (VECTOR's memory of you is kept) |
+| `/phone` | Use VECTOR from your phone: shows the QR code to scan (`/phone off` turns it off, `/phone reset` unpairs every phone) |
 | `/uninstall` | Removes VECTOR. It asks whether to keep your data. |
 | `/quit` (or `/exit`) | Closes VECTOR completely, including the tray icon |
 
@@ -258,6 +264,20 @@ Right-click the VECTOR icon by the clock: **Open VECTOR**, **Listen for "Vector"
 
 On a Mac there's no tray: click VECTOR in the **Dock** to open the bar, and use the **VECTOR** menu
 at the top left of the screen (while VECTOR is the active app) for the same items. **Cmd+Q** quits.
+
+### 6.9 Your phone (VECTOR Remote)
+
+See your computer's screen on your phone and control it, or ask VECTOR things, from anywhere in
+the house. No App Store needed:
+
+1. Type **`/phone`** in the bar. A QR code appears.
+2. Scan it with your phone's Camera (same Wi-Fi as the computer). If the firewall asks, click **Allow**.
+3. iPhone: **Share → Add to Home Screen**. Android: **⋮ → Add to Home screen**.
+
+Tap the picture to click, hold to right-click, drag to scroll, use **⌨ Type** to type, or ask VECTOR
+at the bottom (your keyboard's 🎤 lets you talk). Allow / Deny and **Stop** work on the phone too.
+Only phones that scanned your QR code can connect, and only from your own network. Turn it off with
+`/phone off`. Everything else: **[docs/phone.md](docs/phone.md)**.
 
 ## 7. Everything VECTOR can do (all skills)
 
@@ -303,6 +323,7 @@ They're saved in `C:\Users\<you>\.vector\config.toml` (Mac: `~/.vector/config.to
 | `screen_access` | `ask` | `ask` (once per request), `always`, or `never` |
 | `hotkey` | `ctrl+shift+space` | The summon shortcut, e.g. `ctrl+alt+v` |
 | `focus_mode` | `true` | Dim and block the screen while the bar is open |
+| `phone_remote` | `false` | VECTOR Remote on (set by `/phone`, `/phone off`) |
 | `wake_word` | `vector` | The word that starts voice commands |
 | `listen_on_start` | `true` | Listen for the wake word as soon as VECTOR opens |
 | `speak_replies` | `true` | Speak replies to voice commands |
@@ -411,6 +432,7 @@ shortcut, screen) are covered in [docs/macos.md](docs/macos.md#troubleshooting).
 | Windows setup / removal | `install.ps1`, `scripts/uninstall-windows.ps1` |
 | Mac setup / removal | `install.sh`, `scripts/uninstall-macos.sh` |
 | Mac pieces (shortcut, Keychain, menu name) | `vector/macos.py` |
+| VECTOR Remote (phone app server, the app itself) | `vector/remote.py`, `vector/assets/phone.html`, `vector/pairing.py` |
 
 ## 15. For developers
 
@@ -457,6 +479,6 @@ Windows' own voice.
 scheduled routines ("every morning at 9, open my work apps").
 
 **Contributing:** bug reports, ideas and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
-More details: [docs/windows.md](docs/windows.md) · [docs/macos.md](docs/macos.md). Pre-launch checklist: [docs/TESTING.md](docs/TESTING.md).
+More details: [docs/windows.md](docs/windows.md) · [docs/macos.md](docs/macos.md) · [docs/phone.md](docs/phone.md). Pre-launch checklist: [docs/TESTING.md](docs/TESTING.md).
 
 **License:** [MIT](LICENSE). Free to use, change and share.

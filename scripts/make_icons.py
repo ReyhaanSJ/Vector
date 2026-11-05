@@ -3,7 +3,7 @@
     python scripts/make_icons.py
 
 Writes vector/assets/: icon.ico (Windows shortcuts and windows, 16-256 px),
-icon.png (256 px), icon.icns (the macOS app, 16-1024 px), tray.png (64 px), and docs/logo.png
+icon.png (256 px), icon.icns (the macOS app, 16-1024 px), phone-icon.png (VECTOR Remote), tray.png (64 px), and docs/logo.png
 (wordmark for the README).
 """
 
@@ -55,6 +55,14 @@ def mac_icon() -> Image.Image:
     return app_icon(1024, pad_ratio=0.1)
 
 
+def phone_icon(size: int = 512) -> Image.Image:
+    """The phone's home-screen icon: a full square (iPhone and Android round the corners)."""
+    s = size * SS
+    img = Image.new("RGBA", (s, s), BG)
+    triangle(ImageDraw.Draw(img), (s * 0.27, s * 0.25, s * 0.73, s * 0.72), s * 0.06)
+    return img.resize((size, size), Image.LANCZOS)
+
+
 def tray_icon(size: int = 64) -> Image.Image:
     s = size * SS
     img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
@@ -101,6 +109,7 @@ def main() -> None:
     frames = [app_icon(n) for n in sizes]
     frames[-1].save(ASSETS / "icon.ico", sizes=[(n, n) for n in sizes], append_images=frames[:-1])
     mac_icon().save(ASSETS / "icon.icns")
+    phone_icon().save(ASSETS / "phone-icon.png")
     tray_icon(64).save(ASSETS / "tray.png")
     (ROOT / "docs").mkdir(exist_ok=True)
     wordmark(160).save(ROOT / "docs" / "logo.png")

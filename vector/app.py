@@ -33,6 +33,9 @@ BAR_COMMANDS: dict = {
     "/model": lambda app: app.show_model_info(),
     "/aloud": lambda app: app.toggle_aloud(),
     "/skills": lambda app: app.show_skills(),
+    "/phone": lambda app: app.open_phone_pairing(),
+    "/phone off": lambda app: app.stop_remote(announce=True),
+    "/phone reset": lambda app: app.open_phone_pairing(reset=True),
 }
 
 
@@ -55,6 +58,11 @@ class VectorApp:
         self.engine = None
         self.tray = None
         self._mac_menu = None
+        self.remote = None          # VECTOR Remote (the phone app), when it's on
+        self._pairing = None
+        from vector.remote import RemoteBridge
+
+        self.remote_bridge = RemoteBridge(self)
         self.hotkey = None
         self._current_source = "typed"
         self.update = None
@@ -85,7 +93,7 @@ class VectorApp:
         self.agent = agent
         self._show_model()
         self.agent.confirm = self._confirm
-        self.agent.on_action = lambda name, args: self.ui(self.bar.add_step, name, args)
+        self.agent.on_action = self._on_action
 
         threading.Thread(target=self._worker, name="vector-brain", daemon=True).start()
         self.root.after(40, self._drain_ui)
@@ -103,6 +111,8 @@ class VectorApp:
                 self._start_tray()
         if enable_tray and config.check_updates:
             self.root.after(15000, self.check_updates)  # once things have settled
+        if enable_tray and config.phone_remote:
+            self.start_remote()
         if enable_voice and config.listen_on_start:
             self.toggle_voice()
         else:
@@ -246,6 +256,75 @@ class VectorApp:
         else:
             self.stop_speaking()
 
+    def submit_remote(self, text: str) -> None:
+        """A request typed on the phone (called from the phone server's thread)."""
+        command = text.strip().lower()
+        if command == "/reset":
+            self.agent.reset()
+            self.remote_bridge.state.finished("New conversation. VECTOR still remembers what "
+                                              "you've asked it to.")
+            return
+        self._requests.put((text, "phone", None))
+
+    # -- VECTOR Remote (the phone app) -------------------------------------------------------
+    def start_remote(self) -> bool:
+        from vector import remote
+        from vector.remote import Remote, load_key
+
+        if self.remote is not None and self.remote.running:
+            return True
+        self.remote = Remote(self.remote_bridge, load_key(), port=remote.PORT,
+                             on_connect=lambda addr: self.notify(f"A phone connected to VECTOR ({addr})."))
+        if not self.remote.start():
+            self.notify(self.remote.error or "The phone remote couldn't start.")
+            self.remote = None
+            return False
+        log.info("phone remote on port %s", self.remote.port)
+        return True
+
+    def stop_remote(self, announce: bool = False) -> None:
+        if self.remote is not None:
+            self.remote.stop()
+            self.remote = None
+        if self._pairing is not None:
+            self._pairing.close()
+        self._save_setting("phone_remote", False)
+        if announce:
+            self._info("PHONE REMOTE OFF", "Phones can't reach VECTOR any more. Type /phone to turn "
+                                           "it back on.")
+
+    def open_phone_pairing(self, reset: bool = False) -> None:
+        """Turn the phone remote on and show the QR code to scan."""
+        from vector.remote import load_key
+
+        if reset:
+            if self.remote is not None:
+                self.remote.stop()
+                self.remote = None
+            load_key(reset=True)
+        if not self.start_remote():
+            return
+        self._save_setting("phone_remote", True)
+        self.bar.hide()
+        if self._pairing is not None:
+            self._pairing.close()
+        from vector.pairing import PairingWindow
+
+        self._pairing = PairingWindow(self.root, self.remote.url(), reset=reset,
+                                      on_off=lambda: self.stop_remote(announce=False),
+                                      on_close=lambda: setattr(self, "_pairing", None))
+
+    def _save_setting(self, name: str, value) -> None:
+        if getattr(self.config, name, None) == value:
+            return
+        setattr(self.config, name, value)
+        try:
+            from vector.config import set_config_value
+
+            set_config_value(name, "true" if value is True else "false" if value is False else str(value))
+        except Exception:
+            log.exception("couldn't save %s", name)
+
     def submit_typed(self, text: str) -> None:
         command = text.strip().lower()
         if command in BAR_COMMANDS:
@@ -289,6 +368,7 @@ class VectorApp:
                    "/model      which AI is answering\n"
                    "/aloud      read replies out loud on/off\n"
                    "/reset      start a fresh conversation\n"
+                   "/phone      use VECTOR and see this screen from your phone\n"
                    "/uninstall  remove VECTOR (you can keep your data)\n"
                    "/quit       close VECTOR\n"
                    "Anything else is a request, e.g. \u201copen spotify\u201d.")
@@ -357,7 +437,15 @@ class VectorApp:
         from vector.config import describe_model
 
         model = getattr(getattr(self.agent, "brain", None), "model", None) or self.config.resolved_model
-        self.bar.set_model(describe_model(self.config.resolved_provider, model))
+        label = describe_model(self.config.resolved_provider, model)
+        self.bar.set_model(label)
+        self.remote_bridge.state.model = label
+
+    def _on_action(self, name: str, args: dict) -> None:
+        """A skill is about to run: list it in the bar and on the phone."""
+        self.remote_bridge.state.step(describe_step(name, args))
+        if self._current_source != "phone":
+            self.ui(self.bar.add_step, name, args)
 
     def _worker(self) -> None:
         from vector.brain import BrainError, Cancelled
@@ -369,6 +457,7 @@ class VectorApp:
                 continue
             self._current_source = source
             self._busy = True
+            self.remote_bridge.state.started(text)
             self.ui(self._set_active)
             error = False
             reply: str | None
@@ -382,12 +471,16 @@ class VectorApp:
                 log.exception("request failed")
                 reply, error = f"Something went wrong: {exc}", True
             self._busy = False
+            self.remote_bridge.state.finished(reply, error)
             self.ui(self._set_active)
+            from_phone = source == "phone"
             if self._tucked:  # bring the bar back to show the answer
                 self._tucked = False
-                if reply is not None:
+                if reply is not None and not from_phone:
                     self.ui(self.bar.show, False)
-            if reply is not None:
+            if from_phone:
+                pass  # the answer is on the phone; the computer's screen stays as it was
+            elif reply is not None:
                 self.ui(self.bar.finish_request, reply, error)
                 if source == "voice":
                     self.ui(self.bar.hide_later, 9000)
@@ -410,7 +503,15 @@ class VectorApp:
                 decided.set()
 
         self._confirm_answer = answer
-        self.ui(self.bar.ask_confirm, name, args, answer)
+        from vector.agent import SCREEN_PERMISSION
+
+        if name == SCREEN_PERMISSION:
+            detail = "See and control your screen (mouse and keyboard) for this request"
+        else:
+            detail = f"{name}({', '.join(f'{k}={v!r}' for k, v in args.items())[:240]})"
+        self.remote_bridge.state.ask("Needs your OK", detail, answer)
+        if self._current_source != "phone":  # asked from the phone: answer it there
+            self.ui(self.bar.ask_confirm, name, args, answer)
         if self._current_source == "voice" and self.engine is not None:
             def by_voice():
                 ask = ("Can I look at and control your screen?" if name == "use_your_screen"
@@ -425,6 +526,7 @@ class VectorApp:
         if not decided.wait(timeout=120):
             answer(False)
         self._confirm_answer = None
+        self.remote_bridge.state.asked_done()
         if self.engine is not None and not decided.is_set():
             self.engine.stop_speaking()
         self.ui(self.bar.cancel_confirm)
@@ -531,6 +633,7 @@ class VectorApp:
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(lambda item: f"Update to {self.update.version}" if self.update else "",
                              lambda: self.start_update(), visible=lambda item: self.update is not None),
+            pystray.MenuItem("Use from your phone...", lambda: self.ui(self.open_phone_pairing)),
             pystray.MenuItem("Check for updates", lambda: self.check_updates(force=True)),
             pystray.MenuItem("Guide", lambda: self.ui(self.open_guide)),
             pystray.MenuItem(f"About VECTOR {__version__}", lambda: None, enabled=False),
@@ -561,6 +664,7 @@ class VectorApp:
         app_menu.add_checkbutton(label="Listen for \u201cVector\u201d", variable=self._voice_var,
                                  command=self.toggle_voice)
         app_menu.add_separator()
+        app_menu.add_command(label="Use from your phone...", command=self.open_phone_pairing)
         app_menu.add_command(label="Check for updates", command=lambda: self.check_updates(force=True))
         app_menu.add_command(label="Guide", command=self.open_guide)
         app_menu.add_separator()
@@ -649,6 +753,8 @@ class VectorApp:
     def quit(self) -> None:
         self._quit.set()
         self._voice_pause.set()
+        if self.remote is not None:
+            self.remote.stop()
         if self.hotkey:
             self.hotkey.stop()
         if self.engine:
@@ -727,8 +833,8 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:
             pass
         return 1
-    server = InstanceServer(lambda msg: app.ui(
-        app.quit if msg == "quit" else (lambda: None) if msg == "voice" else app.bar.show))
+    handlers = {"quit": app.quit, "voice": lambda: None, "phone": app.open_phone_pairing}
+    server = InstanceServer(lambda msg: app.ui(handlers.get(msg, app.bar.show)))
     server.start()
     from vector.guide import should_show
 

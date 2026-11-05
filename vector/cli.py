@@ -8,6 +8,7 @@
     vector --selftest           check that everything works on this computer
     vector --app                background app: summon bar + say "Vector, ..." anywhere
     vector --startup on         start the VECTOR app when you log in (Windows and macOS)
+    vector --phone              use VECTOR and see this screen from your phone (VECTOR Remote)
 """
 
 from __future__ import annotations
@@ -123,6 +124,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--versions", action="store_true", help="list every VECTOR version")
     p.add_argument("--models", action="store_true", help="list the AI models you can use right now")
     p.add_argument("--guide", action="store_true", help="show the illustrated guide")
+    p.add_argument("--phone", action="store_true",
+                   help="use VECTOR from your phone: shows the QR code to scan (VECTOR Remote)")
     p.add_argument("--uninstall", action="store_true", help="remove VECTOR (you can keep your data)")
     p.add_argument("--set", metavar="KEY=VALUE", action="append",
                    help="save a setting, e.g. --set model=qwen2.5:7b or --set user_name=Ray")
@@ -193,6 +196,9 @@ def main(argv: list[str] | None = None) -> int:
 
         return guide_main()
 
+    if args.phone:
+        return pair_phone()
+
     if args.uninstall:
         return uninstall_from_terminal()
 
@@ -245,6 +251,25 @@ def main(argv: list[str] | None = None) -> int:
     if args.voice:
         return voice_loop(vector)
     return text_loop(vector)
+
+
+def pair_phone() -> int:
+    """Ask the running VECTOR app to show its pairing QR code (the app serves the phone)."""
+    from vector.instance import signal_running
+
+    if signal_running("phone"):
+        say("VECTOR is showing the QR code on your screen. Scan it with your phone's Camera.")
+        return 0
+    from vector.config import set_config_value
+    from vector.remote import load_key, phone_url, qr_text
+
+    set_config_value("phone_remote", "true")
+    url = phone_url(load_key())
+    print(qr_text(url))
+    say("Open the VECTOR app (it serves your phone), then scan this with your phone's Camera:")
+    print(f"  {url}\n")
+    say("Your phone must be on the same Wi-Fi. iPhone: Share > Add to Home Screen to keep it.")
+    return 0
 
 
 def set_startup(mode: str) -> int:

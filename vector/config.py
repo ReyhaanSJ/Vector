@@ -99,6 +99,7 @@ class Config:
     whisper_model: str = "base.en"
     hotkey: str = "ctrl+shift+space"
     focus_mode: bool = True
+    phone_remote: bool = False  # VECTOR Remote: use VECTOR from your phone (/phone)
     check_updates: bool = True
     skill_dirs: list[str] = field(default_factory=list)
 

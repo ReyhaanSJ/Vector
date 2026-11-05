@@ -99,8 +99,10 @@ jobs:
           $app = Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\VECTOR"
           if ($app.DisplayName -ne "VECTOR" -or -not $app.UninstallString) { throw "not listed in Settings > Apps" }
           "Settings > Apps: $($app.DisplayName) $($app.DisplayVersion)"
-          & "$env:LOCALAPPDATA\Programs\VECTOR\.venv\Scripts\python.exe" -c "import pystray, PIL, sounddevice, vosk, faster_whisper; print('app + voice packages OK')"
+          & "$env:LOCALAPPDATA\Programs\VECTOR\.venv\Scripts\python.exe" -c "import pystray, PIL, sounddevice, vosk, faster_whisper, segno; print('app + voice + phone packages OK')"
           if ($LASTEXITCODE) { exit 1 }
+          & "$env:LOCALAPPDATA\Programs\VECTOR\.venv\Scripts\python.exe" tests\phone\real_screen.py
+          if ($LASTEXITCODE) { throw "the phone remote can't see or control the real screen" }
           Get-Content "$env:USERPROFILE\.vector\config.toml" | Select-String "^(provider|model) ="
           if ("${{ matrix.ai }}" -eq "ollama") {
             if (-not (Select-String -Path "$env:USERPROFILE\.vector\config.toml" -Pattern '^provider = "ollama"')) { throw "ollama not configured" }
@@ -173,6 +175,12 @@ jobs:
           out=$("$HOME/Library/Application Support/VECTOR/.venv/bin/python" tests/mac_typing_check.py)
           echo "$out"
           echo "$out" | grep -q "typed='hello'"
+      - name: The phone remote sees and controls the real Mac screen
+        if: matrix.ai == 'none'
+        timeout-minutes: 3
+        run: |
+          "$HOME/Library/Application Support/VECTOR/.venv/bin/python" -c "import segno"
+          "$HOME/Library/Application Support/VECTOR/.venv/bin/python" tests/phone/real_screen.py
       - name: Open VECTOR from Applications and quit it
         run: |
           open "$HOME/Applications/VECTOR.app"
@@ -203,6 +211,31 @@ jobs:
           test ! -e "$HOME/.local/bin/vector"
           test ! -e "$HOME/Library/LaunchAgents/com.vector.assistant.plist"
           test -f "$HOME/.vector/config.toml"   # user data is kept by default
+
+  # VECTOR Remote (the phone app) in a pretend iPhone: taps, scrolling, asking, Allow.
+  phone-app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e ".[dev]" pillow
+      - name: Install a browser for the pretend iPhone
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
+          npm init -y >/dev/null && npm install playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - run: python tests/phone/run.py screenshots
+        env:
+          NODE_PATH: ${{ runner.temp }}/pw/node_modules
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phone-app-screenshots
+          path: screenshots/
+          if-no-files-found: ignore
 
   # Windows' own voice speaks "Vector. Open notepad." and VECTOR must understand it.
   speech-e2e:

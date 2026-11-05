@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VECTOR">
+<meta name="theme-color" content="#0B1016">
+<link rel="apple-touch-icon" href="/icon.png">
+<link rel="icon" href="/icon.png">
+<link rel="manifest" id="manifest" href="/manifest.json">
+<title>VECTOR Remote</title>
+<style>
+  :root {
+    --bg: #0B1016; --panel: #121A22; --panel2: #18222C; --line: #22303C; --text: #E6EDF3;
+    --muted: #8B98A5; --dim: #5B6773; --accent: #5CD6EA; --accent-bg: #10313A;
+    --amber: #F2B84B; --amber-bg: #2A2110; --red: #F2545B; --green: #4ADE80;
+    --top: env(safe-area-inset-top, 0px); --bottom: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; }
+  body { display: flex; flex-direction: column; overflow: hidden; }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+  .hidden { display: none !important; }
+
+  /* -- header -- */
+  header { display: flex; align-items: center; gap: 10px; padding: calc(var(--top) + 10px) 16px 10px;
+    border-bottom: 1px solid var(--line); flex: none; }
+  header svg { flex: none; }
+  .title { flex: 1; min-width: 0; }
+  .title b { display: block; font-size: 16px; letter-spacing: .5px; }
+  .title span { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); flex: none; }
+  .dot.on { background: var(--green); } .dot.off { background: var(--red); }
+  .stop { background: var(--red); color: #fff; font-weight: 700; padding: 8px 16px; border-radius: 12px; }
+
+  /* -- the live screen -- */
+  #screenWrap { position: relative; flex: none; background: #000; touch-action: none;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; overflow: hidden; }
+  #screen { display: block; width: 100%; height: auto; min-height: 120px; pointer-events: none; }
+  #cursor { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%;
+    border: 2px solid var(--accent); box-shadow: 0 0 0 2px rgba(0,0,0,.55); pointer-events: none; }
+  .ripple { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%;
+    border: 2px solid var(--accent); pointer-events: none; animation: ripple .45s ease-out forwards; }
+  .ripple.right { border-color: var(--amber); }
+  @keyframes ripple { from { transform: scale(.3); opacity: 1 } to { transform: scale(1.4); opacity: 0 } }
+  #screenNote { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    padding: 20px; text-align: center; color: var(--muted); font-size: 14px; pointer-events: none; }
+  #fps { position: absolute; right: 8px; top: 8px; font-size: 11px; color: var(--muted);
+    background: rgba(11,16,22,.75); padding: 2px 7px; border-radius: 8px; pointer-events: none; }
+
+  /* -- buttons under the screen -- */
+  .keys { display: flex; gap: 8px; padding: 10px 12px; overflow-x: auto; flex: none;
+    border-bottom: 1px solid var(--line); scrollbar-width: none; }
+  .keys::-webkit-scrollbar { display: none; }
+  .key { flex: none; min-width: 46px; height: 40px; padding: 0 12px; border-radius: 12px;
+    background: var(--panel2); border: 1px solid var(--line); font-size: 14px; font-weight: 600; }
+  .key.on { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+
+  /* -- chat with VECTOR -- */
+  main { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px 8px; -webkit-overflow-scrolling: touch; }
+  .label { font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--muted); margin: 0 0 6px; }
+  .bubble { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px;
+    margin-bottom: 12px; white-space: pre-wrap; word-wrap: break-word; }
+  .you { background: var(--accent-bg); border-color: #1D4E59; margin-left: 40px; }
+  .steps { list-style: none; margin: 0 0 12px; padding: 0; }
+  .steps li { display: flex; gap: 10px; align-items: baseline; padding: 8px 12px; margin-bottom: 6px;
+    background: var(--panel); border-radius: 12px; font-size: 14px; }
+  .steps li i { font-style: normal; color: var(--accent); font-weight: 700; font-size: 12px; }
+  .thinking { color: var(--accent); font-size: 14px; margin-bottom: 12px; }
+  .thinking::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent); margin-right: 8px; animation: pulse 1s infinite alternate; }
+  @keyframes pulse { from { opacity: .3 } to { opacity: 1 } }
+  .error { border-color: #5A2328; color: #FFB4B8; }
+  .confirm { background: var(--amber-bg); border: 1px solid #5C4718; border-radius: 16px; padding: 14px;
+    margin-bottom: 12px; }
+  .confirm b { color: var(--amber); display: block; margin-bottom: 6px; }
+  .confirm code { display: block; font: 13px/1.4 ui-monospace, Menlo, monospace; color: var(--text);
+    word-break: break-word; margin-bottom: 12px; }
+  .row { display: flex; gap: 10px; }
+  .allow { flex: 1; background: var(--amber); color: #1A1406; font-weight: 700; padding: 12px; border-radius: 12px; }
+  .deny { flex: 1; border: 1px solid #5C4718; padding: 12px; border-radius: 12px; }
+  .hint { color: var(--dim); font-size: 13px; text-align: center; padding: 18px 10px; }
+
+  footer { flex: none; padding: 10px 12px calc(var(--bottom) + 10px); border-top: 1px solid var(--line);
+    display: flex; gap: 8px; align-items: flex-end; background: var(--bg); }
+  textarea { flex: 1; resize: none; max-height: 120px; min-height: 44px; padding: 11px 14px;
+    border-radius: 14px; border: 1px solid var(--line); background: var(--panel); color: var(--text);
+    font: 16px/1.35 inherit; outline: none; }
+  textarea:focus { border-color: var(--accent); }
+  .send { width: 44px; height: 44px; border-radius: 14px; background: var(--accent); color: var(--bg);
+    flex: none; display: flex; align-items: center; justify-content: center; }
+  .send:disabled { opacity: .4; }
+  .round { width: 44px; height: 44px; border-radius: 14px; background: var(--panel2);
+    border: 1px solid var(--line); flex: none; display: flex; align-items: center; justify-content: center; }
+  .round.on { background: var(--accent-bg); border-color: var(--accent); }
+
+  /* -- "type on the computer" sheet -- */
+  .sheet { position: fixed; inset: 0; background: rgba(3,6,10,.6); display: flex; align-items: flex-end; z-index: 9; }
+  .sheet > div { width: 100%; background: var(--panel); border-radius: 20px 20px 0 0;
+    padding: 18px 16px calc(var(--bottom) + 16px); }
+  .sheet textarea { width: 100%; margin: 10px 0; }
+  .primary { flex: 1; background: var(--accent); color: var(--bg); font-weight: 700; padding: 12px; border-radius: 12px; }
+  .secondary { flex: 1; border: 1px solid var(--line); padding: 12px; border-radius: 12px; }
+
+  /* -- not paired -- */
+  #pair { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 30px; gap: 14px; }
+  #pair p { color: var(--muted); max-width: 320px; margin: 0; }
+  #pair code { background: var(--panel); padding: 2px 8px; border-radius: 6px; color: var(--accent); }
+
+  /* -- big screen (landscape or the full-screen button) -- */
+  body.big header, body.big main, body.big footer { display: none; }
+  body.big #app { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-top: var(--top); }
+  body.big #screenWrap { flex: 1; min-height: 0; display: flex; align-items: center; }
+  body.big #screen { width: 100%; height: 100%; object-fit: contain; }
+  body.big .keys { padding-bottom: calc(var(--bottom) + 10px); }
+</style>
+</head>
+<body>
+<header>
+  <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+    <path d="M13 3 L23 22 L3 22 Z M13 10.5 L13 22" fill="none" stroke="#5CD6EA" stroke-width="2.4"
+          stroke-linejoin="round" stroke-linecap="round"/>
+  </svg>
+  <div class="title"><b>VECTOR</b><span><i class="dot" id="dot"></i><span id="status">Connecting...</span></span></div>
+  <button class="stop hidden" id="stop">Stop</button>
+</header>
+
+<div id="pair" class="hidden">
+  <svg width="64" height="64" viewBox="0 0 26 26" aria-hidden="true">
+    <path d="M13 3 L23 22 L3 22 Z M13 10.5 L13 22" fill="none" stroke="#5CD6EA" stroke-width="1.6"
+          stroke-linejoin="round" stroke-linecap="round"/>
+  </svg>
+  <h2 style="margin:0">Pair with your computer</h2>
+  <p id="pairText">On your computer, press the VECTOR shortcut and type <code>/phone</code>.
+     Then scan the QR code with your phone's Camera.</p>
+</div>
+
+<div id="app">
+  <div id="screenWrap">
+    <img id="screen" alt="Your computer's screen">
+    <div id="cursor" class="hidden"></div>
+    <div id="screenNote">Loading your screen...</div>
+    <div id="fps" class="hidden"></div>
+  </div>
+  <div class="keys" id="keys">
+    <button class="key" id="viewOnly" title="Look without clicking">&#128065; View</button>
+    <button class="key" id="typeBtn">&#9000; Type</button>
+    <button class="key" data-keys="esc">Esc</button>
+    <button class="key" data-keys="enter">Enter</button>
+    <button class="key" data-keys="backspace">&#9003;</button>
+    <button class="key" data-keys="tab">Tab</button>
+    <button class="key" data-keys="up">&#8593;</button>
+    <button class="key" data-keys="down">&#8595;</button>
+    <button class="key" data-keys="left">&#8592;</button>
+    <button class="key" data-keys="right">&#8594;</button>
+    <button class="key" data-keys="playpause">&#9199;</button>
+    <button class="key" data-keys="volumedown">Vol &#8722;</button>
+    <button class="key" data-keys="volumeup">Vol +</button>
+    <button class="key" id="bigBtn">&#10530; Big</button>
+  </div>
+</div>
+
+<main id="chat">
+  <div class="hint" id="hint">Tap the screen to click, hold to right-click, drag to scroll.<br>
+    Or ask VECTOR below. Use your keyboard's &#127908; to talk instead of typing.</div>
+</main>
+
+<footer id="footer">
+  <button class="round" id="aloud" title="Read replies out loud" aria-label="Read replies out loud">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="wave" d="M16 9a4 4 0 0 1 0 6"/></svg>
+  </button>
+  <textarea id="ask" rows="1" placeholder="Ask VECTOR to do something..." enterkeyhint="send"></textarea>
+  <button class="send" id="send" aria-label="Send">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+         stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+  </button>
+</footer>
+
+<div class="sheet hidden" id="typeSheet">
+  <div>
+    <div class="label">TYPE ON YOUR COMPUTER</div>
+    <div style="color:var(--muted);font-size:13px">Goes wherever the cursor is on your computer.</div>
+    <textarea id="typeText" rows="3" placeholder="Text to type..."></textarea>
+    <div class="row">
+      <button class="secondary" id="typeCancel">Cancel</button>
+      <button class="secondary" id="typeEnter">Type + Enter</button>
+      <button class="primary" id="typeSend">Type</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const params = new URLSearchParams(location.search);
+  let key = params.get("k") || "";
+  try {
+    if (key) localStorage.setItem("vectorKey", key); else key = localStorage.getItem("vectorKey") || "";
+  } catch (e) {}
+  if (key) $("manifest").href = "/manifest.json?k=" + encodeURIComponent(key);
+
+  const state = { seq: -1, busy: false, connected: false, viewOnly: false, aloud: false,
+                  screenW: 0, screenH: 0, spoken: -1 };
+  try { state.aloud = localStorage.getItem("vectorAloud") === "1"; } catch (e) {}
+
+  async function api(path, body) {
+    const res = await fetch(path, {
+      method: body === undefined ? "GET" : "POST", cache: "no-store",
+      headers: Object.assign({ "X-Vector-Key": key }, body === undefined ? {} : { "Content-Type": "application/json" }),
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (res.status === 401) { unpaired(); throw new Error("unpaired"); }
+    return res;
+  }
+  async function post(path, body) {
+    try {
+      const res = await api(path, body || {});
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok && data.error) toast(data.error);
+      return data;
+    } catch (e) { return {}; }
+  }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  function unpaired() {
+    $("pair").classList.remove("hidden");
+    for (const id of ["app", "chat", "footer"]) $(id).classList.add("hidden");
+    setStatus(false, "Not paired");
+  }
+  function setStatus(ok, text) {
+    state.connected = ok;
+    $("dot").className = "dot " + (ok ? "on" : "off");
+    $("status").textContent = text;
+  }
+  function toast(text) {
+    const note = document.createElement("div");
+    note.className = "bubble error";
+    note.textContent = text;
+    $("chat").prepend(note);
+    setTimeout(() => note.remove(), 6000);
+  }
+
+  // -- the live screen ---------------------------------------------------------------------
+  const img = $("screen");
+  let frames = 0, lastFps = performance.now(), previousUrl = null;
+  async function screenLoop() {
+    for (;;) {
+      if (document.hidden) { await sleep(600); continue; }
+      const started = performance.now();
+      try {
+        const big = document.body.classList.contains("big");
+        const width = Math.min(1600, Math.max(480, Math.round((img.clientWidth || 400) * (devicePixelRatio || 2))));
+        const res = await api(`/api/screen?w=${width}&q=${big ? 70 : 60}`);
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          $("screenNote").textContent = data.error || "Can't see the screen right now.";
+          $("screenNote").classList.remove("hidden");
+          await sleep(2000);
+          continue;
+        }
+        const mouse = (res.headers.get("X-Mouse") || "").split(",").map(Number);
+        const url = URL.createObjectURL(await res.blob());
+        img.src = url;
+        if (previousUrl) URL.revokeObjectURL(previousUrl);
+        previousUrl = url;
+        $("screenNote").classList.add("hidden");
+        if (mouse.length === 2 && !isNaN(mouse[0])) {
+          const a = drawn(), c = $("cursor");
+          if (a) {
+            c.classList.remove("hidden");
+            c.style.left = (a.x + mouse[0] * a.w) + "px";
+            c.style.top = (a.y + mouse[1] * a.h) + "px";
+          }
+        }
+        if (!state.connected) setStatus(true, state.name ? "Connected to " + state.name : "Connected");
+        frames++;
+        const now = performance.now();
+        if (now - lastFps > 2000) {
+          $("fps").textContent = Math.round(frames * 1000 / (now - lastFps)) + " fps";
+          $("fps").classList.remove("hidden");
+          frames = 0; lastFps = now;
+        }
+      } catch (e) {
+        if (e.message === "unpaired") return;
+        setStatus(false, "Can't reach your computer");
+        $("screenNote").textContent = "Can't reach your computer. Is VECTOR open, and is this phone on the same Wi-Fi?";
+        $("screenNote").classList.remove("hidden");
+        await sleep(2000);
+        continue;
+      }
+      await sleep(Math.max(0, 140 - (performance.now() - started)));
+    }
+  }
+
+  // The part of the box the picture is drawn in (the big view letterboxes it), relative to the box.
+  function drawn() {
+    const r = img.getBoundingClientRect(), box = $("screenWrap").getBoundingClientRect();
+    if (!r.width || !r.height || !img.naturalWidth) return null;
+    const ratio = img.naturalWidth / img.naturalHeight;
+    let w = r.width, h = r.height, x = r.left - box.left, y = r.top - box.top;
+    if (w / h > ratio) { w = h * ratio; x += (r.width - w) / 2; } else { h = w / ratio; y += (r.height - h) / 2; }
+    return { x, y, w, h, box };
+  }
+  // Where on the computer's screen a finger is (0..1 across the picture).
+  function spot(ev) {
+    const a = drawn();
+    if (!a) return null;
+    const px = ev.clientX - a.box.left, py = ev.clientY - a.box.top;
+    const x = (px - a.x) / a.w, y = (py - a.y) / a.h;
+    if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+    return { x, y, px, py };
+  }
+  function ripple(p, right) {
+    const r = document.createElement("div");
+    r.className = "ripple" + (right ? " right" : "");
+    r.style.left = p.px + "px"; r.style.top = p.py + "px";
+    $("screenWrap").appendChild(r);
+    setTimeout(() => r.remove(), 500);
+  }
+
+  let touch = null;
+  const wrap = $("screenWrap");
+  wrap.addEventListener("pointerdown", (ev) => {
+    if (state.viewOnly) return;
+    const p = spot(ev);
+    touch = { x: ev.clientX, y: ev.clientY, p, moved: false, scrolled: 0, long: false };
+    touch.timer = setTimeout(() => {
+      if (!touch || touch.moved || !touch.p) return;
+      touch.long = true;
+      if (navigator.vibrate) navigator.vibrate(15);
+      ripple(touch.p, true);
+      post("/api/click", { x: touch.p.x, y: touch.p.y, button: "right" });
+    }, 550);
+  });
+  wrap.addEventListener("pointermove", (ev) => {
+    if (!touch) return;
+    const dy = ev.clientY - touch.y;
+    if (!touch.moved && Math.hypot(ev.clientX - touch.x, dy) > 12) touch.moved = true;
+    if (touch.moved) {
+      const steps = Math.trunc((dy - touch.scrolled) / 28);
+      if (steps) { touch.scrolled += steps * 28; post("/api/scroll", { steps }); }
+    }
+  });
+  const end = () => {
+    if (!touch) return;
+    clearTimeout(touch.timer);
+    if (!touch.moved && !touch.long && touch.p) {
+      ripple(touch.p, false);
+      post("/api/click", { x: touch.p.x, y: touch.p.y, button: "left" });
+    }
+    touch = null;
+  };
+  wrap.addEventListener("pointerup", end);
+  wrap.addEventListener("pointercancel", () => { if (touch) clearTimeout(touch.timer); touch = null; });
+  wrap.addEventListener("contextmenu", (ev) => ev.preventDefault());
+
+  // -- keys, typing, big view --
+  document.querySelectorAll("[data-keys]").forEach((b) =>
+    b.addEventListener("click", () => post("/api/keys", { keys: b.dataset.keys.split("+") })));
+  $("viewOnly").addEventListener("click", () => {
+    state.viewOnly = !state.viewOnly;
+    $("viewOnly").classList.toggle("on", state.viewOnly);
+    $("viewOnly").innerHTML = state.viewOnly ? "&#128065; Viewing only" : "&#128065; View";
+  });
+  $("bigBtn").addEventListener("click", () => document.body.classList.toggle("big"));
+  const landscape = matchMedia("(orientation: landscape) and (max-height: 500px)");
+  const fit = () => document.body.classList.toggle("big", landscape.matches);
+  landscape.addEventListener ? landscape.addEventListener("change", fit) : landscape.addListener(fit);
+  fit();
+
+  const sheet = $("typeSheet");
+  $("typeBtn").addEventListener("click", () => { sheet.classList.remove("hidden"); $("typeText").focus(); });
+  $("typeCancel").addEventListener("click", () => sheet.classList.add("hidden"));
+  async function typeOut(enter) {
+    const text = $("typeText").value;
+    sheet.classList.add("hidden");
+    if (text) await post("/api/type", { text });
+    if (enter) await post("/api/keys", { keys: ["enter"] });
+    $("typeText").value = "";
+  }
+  $("typeSend").addEventListener("click", () => typeOut(false));
+  $("typeEnter").addEventListener("click", () => typeOut(true));
+
+  // -- asking VECTOR ------------------------------------------------------------------------
+  const ask = $("ask");
+  ask.addEventListener("input", () => { ask.style.height = "auto"; ask.style.height = Math.min(ask.scrollHeight, 120) + "px"; });
+  ask.addEventListener("keydown", (ev) => { if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); send(); } });
+  $("send").addEventListener("click", send);
+  async function send() {
+    const text = ask.value.trim();
+    if (!text || state.busy) return;
+    ask.value = ""; ask.style.height = "auto"; ask.blur();
+    const data = await post("/api/ask", { text });
+    if (data.ok) { state.busy = true; render({ busy: true, request: text, steps: [], reply: "", seq: state.seq }); }
+  }
+  $("stop").addEventListener("click", () => post("/api/stop"));
+  $("aloud").addEventListener("click", () => {
+    state.aloud = !state.aloud;
+    try { localStorage.setItem("vectorAloud", state.aloud ? "1" : "0"); } catch (e) {}
+    paintAloud();
+    if (!state.aloud && window.speechSynthesis) speechSynthesis.cancel();
+    else if (window.speechSynthesis) speechSynthesis.speak(new SpeechSynthesisUtterance(""));  // unlock iOS speech
+  });
+  function paintAloud() {
+    $("aloud").classList.toggle("on", state.aloud);
+    $("aloud").style.color = state.aloud ? "var(--accent)" : "var(--muted)";
+  }
+  paintAloud();
+
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+
+  function render(s) {
+    const chat = $("chat");
+    chat.replaceChildren();
+    $("stop").classList.toggle("hidden", !s.busy);
+    $("send").disabled = !!s.busy;
+    if (!s.request && !s.reply) {
+      const hint = el("div", "hint");
+      hint.innerHTML = "Tap the screen to click, hold to right-click, drag to scroll.<br>" +
+        "Or ask VECTOR below. Use your keyboard's &#127908; to talk instead of typing.";
+      chat.replaceChildren(hint);
+      return;
+    }
+    if (s.request) chat.append(el("div", "label", "YOU"), el("div", "bubble you", s.request));
+    if (s.steps && s.steps.length) {
+      chat.append(el("div", "label", s.busy ? "VECTOR WILL" : "DONE"));
+      const list = el("ol", "steps");
+      s.steps.forEach((t, i) => { const li = el("li"); li.append(el("i", "", String(i + 1)), el("span", "", t)); list.append(li); });
+      chat.append(list);
+    }
+    if (s.confirm) {
+      const card = el("div", "confirm");
+      card.append(el("b", "", "⚠ " + s.confirm.title), el("code", "", s.confirm.detail));
+      const row = el("div", "row");
+      const allow = el("button", "allow", "Allow"), deny = el("button", "deny", "Deny");
+      allow.onclick = () => post("/api/answer", { allow: true });
+      deny.onclick = () => post("/api/answer", { allow: false });
+      row.append(allow, deny); card.append(row); chat.append(card);
+      if (navigator.vibrate) navigator.vibrate([20, 60, 20]);
+    } else if (s.busy) {
+      chat.append(el("div", "thinking", "Thinking..."));
+    }
+    if (s.reply && !s.busy) {
+      chat.append(el("div", "label", "VECTOR"), el("div", "bubble" + (s.error ? " error" : ""), s.reply));
+      if (state.aloud && window.speechSynthesis && state.spoken !== s.seq && state.seq !== -1) {
+        state.spoken = s.seq;
+        speechSynthesis.cancel();
+        speechSynthesis.speak(new SpeechSynthesisUtterance(s.reply));
+      }
+    }
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  async function stateLoop() {
+    for (;;) {
+      if (!document.hidden) {
+        try {
+          const res = await api("/api/state");
+          if (res.ok) {
+            const s = await res.json();
+            state.busy = s.busy;
+            if (s.seq !== state.seq) {
+              const first = state.seq === -1;
+              if (first) state.spoken = s.seq;  // don't read out an old reply on opening
+              state.seq = s.seq;
+              render(s);
+            }
+          }
+        } catch (e) { if (e.message === "unpaired") return; }
+      }
+      await sleep(state.busy ? 500 : 900);
+    }
+  }
+
+  async function start() {
+    if (!key) { unpaired(); return; }
+    try {
+      const res = await api("/api/hello");
+      if (res.ok) {
+        const hello = await res.json();
+        state.name = hello.name;
+        setStatus(true, "Connected to " + hello.name);
+      }
+    } catch (e) {
+      if (e.message === "unpaired") return;
+      setStatus(false, "Can't reach your computer");
+    }
+    screenLoop();
+    stateLoop();
+  }
+  start();
+})();
+</script>
+</body>
+</html>
