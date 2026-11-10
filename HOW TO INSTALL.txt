@@ -1,0 +1,19 @@
+VECTOR - your laptop, on command
+================================
+
+WINDOWS 10 / 11
+  Double-click  "Install VECTOR.bat"
+  (If Windows says "Windows protected your PC", click More info > Run anyway.)
+
+MAC (macOS 11 or newer)
+  Double-click  "Install VECTOR.command"
+  (If macOS says it can't be opened, right-click it > Open > Open.)
+
+Then answer the questions. Pressing Enter picks the suggested answer.
+Setup copies VECTOR to its own folder, so you can delete this folder afterwards.
+
+After installing
+  Press Ctrl+Shift+Space anywhere and type what you want, or just say "Vector, ...".
+  Type /guide in the bar for the illustrated guide.
+
+Help, updates and the full manual:  https://github.com/ReyhaanSJ/Vector

@@ -251,7 +251,8 @@ def check_voice(interactive: bool) -> str:
             timer.cancel()
         if heard is None:
             raise RuntimeError("didn't hear \"Vector\" - check mic permissions "
-                               f"({'docs/macos.md' if platform.system() == 'Darwin' else 'docs/windows.md'})")
+                               "(https://github.com/ReyhaanSJ/Vector/blob/HEAD/docs/"
+                               f"{'macos' if platform.system() == 'Darwin' else 'windows'}.md)")
         detail += f'; wake word OK, heard: "{heard}"'
     return detail
 

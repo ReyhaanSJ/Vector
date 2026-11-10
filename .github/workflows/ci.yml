@@ -80,9 +80,16 @@ jobs:
       VECTOR_UNINSTALL_YES: "1"
     steps:
       - uses: actions/checkout@v4
+      - name: Unpack the download exactly as people get it (only the files the ZIP keeps)
+        shell: pwsh
+        run: |
+          git archive --format zip --prefix "VECTOR-download/" -o "$env:RUNNER_TEMP\download.zip" HEAD
+          Expand-Archive "$env:RUNNER_TEMP\download.zip" -DestinationPath "$env:RUNNER_TEMP" -Force
+          Get-ChildItem "$env:RUNNER_TEMP\VECTOR-download" | Select-Object Name
+          if (Test-Path "$env:RUNNER_TEMP\VECTOR-download\tests") { throw "tests/ shouldn't be in the download" }
       - name: Double-click equivalent of "Install VECTOR.bat"
         shell: cmd
-        run: echo.| "Install VECTOR.bat"
+        run: echo.| "%RUNNER_TEMP%\VECTOR-download\Install VECTOR.bat"
       - name: VECTOR runs from the installed copy
         shell: pwsh
         run: |
@@ -144,8 +151,15 @@ jobs:
       VECTOR_UNINSTALL_YES: "1"
     steps:
       - uses: actions/checkout@v4
+      - name: Unpack the download exactly as people get it (only the files the ZIP keeps)
+        run: |
+          git archive --format zip --prefix "VECTOR-download/" -o "$RUNNER_TEMP/download.zip" HEAD
+          ditto -x -k "$RUNNER_TEMP/download.zip" "$RUNNER_TEMP"
+          ls -la "$RUNNER_TEMP/VECTOR-download"
+          test -x "$RUNNER_TEMP/VECTOR-download/Install VECTOR.command"
+          test ! -e "$RUNNER_TEMP/VECTOR-download/tests"
       - name: Double-click equivalent of "Install VECTOR.command"
-        run: echo | "./Install VECTOR.command"
+        run: echo | "$RUNNER_TEMP/VECTOR-download/Install VECTOR.command"
       - name: VECTOR is installed like a Mac app
         run: |
           APP="$HOME/Library/Application Support/VECTOR"
