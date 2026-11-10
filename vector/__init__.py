@@ -1,6 +1,6 @@
 """VECTOR - an open-source, JARVIS-style AI assistant that automates your laptop."""
 
-__version__ = "0.4.3"
+__version__ = "0.4.4"
 
 from vector.registry import tool  # noqa: E402  (re-exported for skill authors)
 

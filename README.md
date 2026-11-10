@@ -268,7 +268,7 @@ the screen (asks once per request)**.
 |---|---|
 | **Apps & web** | open any app (including Microsoft Store apps) · close an app ⚠ · list running apps · open a website · open a search in your browser |
 | **Internet** | search the web and read results · read any web page · download a file ⚠ |
-| **Files** | list a folder · find files · open a file or folder · read a text file · create a folder · write a file ⚠ · move / rename ⚠ · delete ⚠ · tidy a folder into Images/Documents/… ⚠ |
+| **Files** | list a folder · find files · open a file or folder · read a text file · create a folder · write a file ⚠ · move / rename ⚠ · delete ⚠ (to the Recycle Bin, so it can be restored) · tidy a folder into Images/Documents/… ⚠ |
 | **Screen** | look at the screen 🖥 · click 🖥 · move the mouse 🖥 · scroll 🖥 · drag 🖥 · type text 🖥 · keyboard shortcuts 🖥 |
 | **System** | battery / CPU / memory / disk · time and date · volume · lock screen · screenshot · shut down / restart / sleep ⚠ · run a command ⚠ (PowerShell on Windows, the shell on a Mac) |
 | **Windows only** | dark/light mode · screen brightness · open any Settings page · Wi-Fi status · show desktop · empty Recycle Bin ⚠ |

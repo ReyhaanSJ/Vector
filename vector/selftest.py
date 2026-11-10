@@ -225,8 +225,12 @@ def check_voice(interactive: bool) -> str:
         import faster_whisper  # noqa: F401
         import sounddevice as sd
         import vosk  # noqa: F401
-    except (ImportError, OSError) as exc:
+    except ImportError as exc:
         raise Skip('voice packages not installed (pip install -e ".[voice]")') from exc
+    except OSError as exc:
+        from vector.voice import NO_PORTAUDIO
+
+        raise Skip(NO_PORTAUDIO) from exc
     inputs = [d for d in sd.query_devices() if d.get("max_input_channels", 0) > 0]
     if not inputs:
         raise RuntimeError("no microphone found")

@@ -93,3 +93,42 @@ def test_openrouter_401_says_how_to_fix_it():
     finally:
         urllib.request.urlopen = original
     assert "Claude (Anthropic) key" in message and "vector --set-key openrouter" in message
+
+
+def test_bad_settings_are_refused_with_a_reason(tmp_path):
+    import pytest
+
+    from vector.config import ConfigError, load_config, set_config_value
+
+    path = tmp_path / "config.toml"
+    for key, value in [("focus_mode", "maybe"), ("confirm_dangerous", "ture"),
+                       ("screen_access", "sometimes"), ("provider", "gpt"),
+                       ("hotkey", "ctrl+banana"), ("effort", "ultra")]:
+        with pytest.raises(ConfigError):
+            set_config_value(key, value, path)
+    set_config_value("focus_mode", "no", path)
+    set_config_value("screen_access", "Always", path)
+    cfg = load_config(path)
+    assert cfg.focus_mode is False and cfg.screen_access == "Always" and cfg.confirm_dangerous is True
+    assert cfg.problems == []
+
+
+def test_a_typo_in_the_settings_file_doesnt_stop_vector(tmp_path):
+    from vector.config import load_config
+
+    path = tmp_path / "config.toml"
+    path.write_text('user_name = "Rey\nprovider = ollama\n', encoding="utf-8")
+    cfg = load_config(path)                      # no crash: standard settings, and a clear note
+    assert cfg.user_name == "Boss" and cfg.problems and "mistake" in cfg.problems[0]
+    path.write_text('focus_mode = "yes please"\nhotkey = 5\nuser_name = "Rey"\n', encoding="utf-8")
+    cfg = load_config(path)                      # wrong types: those settings fall back, others load
+    assert cfg.focus_mode is True and cfg.hotkey == "ctrl+shift+space" and cfg.user_name == "Rey"
+    assert len(cfg.problems) == 2
+
+
+def test_cli_reports_bad_settings(tmp_path, monkeypatch, capsys):
+    from vector import cli
+
+    monkeypatch.setenv("VECTOR_CONFIG", str(tmp_path / "config.toml"))
+    assert cli.main(["--set", "focus_mode=maybe"]) == 1
+    assert "Not saved" in capsys.readouterr().out

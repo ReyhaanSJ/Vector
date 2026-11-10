@@ -5,6 +5,7 @@ from __future__ import annotations
 import fnmatch
 import os
 import shutil
+import sys
 from pathlib import Path
 
 from vector.osutil import open_with_default_app, personal_folders
@@ -22,6 +23,36 @@ def resolve(path: str) -> Path:
         base = SHORTCUTS[first.lower()]
         return (base / rest) if rest else base
     return Path(raw).expanduser()
+
+
+def _system_folders() -> list[Path]:
+    """Folders the computer itself needs; VECTOR never deletes or moves anything inside them."""
+    if os.name == "nt":
+        root = os.environ.get("SystemRoot", r"C:\Windows")
+        return [Path(root)]
+    return [Path(p) for p in ("/System", "/usr", "/bin", "/sbin", "/etc", "/boot", "/lib",
+                              "/private/etc", "/Library")]
+
+
+def protected(target: Path) -> str | None:
+    """Why VECTOR refuses to delete or move this path, or None if it's fine."""
+    try:
+        target = target.resolve()
+    except OSError:
+        return None
+    home = Path.home().resolve()
+    if target == Path(target.anchor):
+        return "Refusing to touch a whole drive."
+    if target in {p.resolve() for p in SHORTCUTS.values()}:
+        return "Refusing to touch a top-level personal folder (like Desktop or Documents)."
+    if home == target or home.is_relative_to(target):
+        return "Refusing: that folder holds your whole home folder."
+    for system in _system_folders():
+        if target == system or target.is_relative_to(system):
+            return "Refusing: that's part of the operating system."
+    if target == Path("/Applications"):
+        return "Refusing to touch the whole Applications folder."
+    return None
 
 
 def _size(n: float) -> str:
@@ -146,26 +177,38 @@ def move_or_rename(source: str, destination: str) -> str:
     src, dst = resolve(source), resolve(destination)
     if not src.exists():
         return f"{src} does not exist."
+    reason = protected(src)
+    if reason:
+        return reason
     final = shutil.move(str(src), str(dst))
     return f"Moved {src} -> {final}"
 
 
+BIN_NAME = "Recycle Bin" if os.name == "nt" else "Bin" if sys.platform == "darwin" else "Trash"
+
+
 @tool(dangerous=True)
 def delete_path(path: str) -> str:
-    """Delete a file or folder permanently. Only use when the user clearly asks.
+    """Delete a file or folder by moving it to the Recycle Bin (it can be restored from there).
+    Only use when the user clearly asks.
 
     path: What to delete.
     """
     target = resolve(path)
-    if not target.exists():
+    if not target.exists() and not target.is_symlink():
         return f"{target} does not exist."
-    if target in SHORTCUTS.values() or target == Path(target.anchor):
-        return "Refusing to delete a top-level personal folder or drive."
-    if target.is_dir():
-        shutil.rmtree(target)
-    else:
-        target.unlink()
-    return f"Deleted {target}"
+    reason = protected(target)
+    if reason:
+        return reason
+    try:
+        from send2trash import send2trash
+
+        send2trash(str(target))
+    except ImportError:
+        return "Deleting needs the Send2Trash package: pip install send2trash. Nothing was deleted."
+    except Exception as exc:  # e.g. a network drive with no Recycle Bin
+        return f"Couldn't move {target} to the {BIN_NAME} ({exc}). Nothing was deleted."
+    return f"Moved {target} to the {BIN_NAME}. It can be restored from there."
 
 
 CATEGORIES = {

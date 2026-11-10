@@ -727,6 +727,9 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:
             pass
         return 1
+    for problem in config.problems:  # e.g. a typo in config.toml: say so instead of failing
+        log.warning("settings: %s", problem)
+        app.notify(problem)
     server = InstanceServer(lambda msg: app.ui(
         app.quit if msg == "quit" else (lambda: None) if msg == "voice" else app.bar.show))
     server.start()

@@ -50,3 +50,52 @@ def test_wake_word():
     assert strip_wake_word("hey victor what time is it", "vector") == "what time is it"
     assert strip_wake_word("vector", "vector") == ""
     assert strip_wake_word("just talking", "vector") is None
+
+
+def test_delete_goes_to_the_recycle_bin(tmp_path, monkeypatch):
+    import send2trash
+
+    from vector.skills import files
+
+    binned = []
+    monkeypatch.setattr(send2trash, "send2trash", binned.append)
+    victim = tmp_path / "old.txt"
+    victim.write_text("x")
+    out = files.delete_path(str(victim))
+    assert binned == [str(victim)] and "restored" in out
+
+
+def test_system_and_home_folders_are_protected(tmp_path):
+    import os
+    from pathlib import Path
+
+    from vector.skills import files
+
+    home = Path.home()
+    for path in (home, home.parent, Path(home.anchor)):
+        assert files.protected(path), path
+    system = Path(os.environ.get("SystemRoot", r"C:\Windows")) if os.name == "nt" else Path("/usr/bin")
+    assert files.protected(system)
+    assert files.protected(tmp_path / "anything") is None
+    assert "Refusing" in files.delete_path(str(home.parent))
+    assert "Refusing" in files.move_or_rename(str(home.parent), str(tmp_path / "x"))
+
+
+def test_missing_sound_system_is_explained(monkeypatch):
+    import builtins
+
+    import pytest
+
+    from vector import voice
+
+    real_import = builtins.__import__
+
+    def no_portaudio(name, *args, **kwargs):
+        if name == "sounddevice":
+            raise OSError("PortAudio library not found")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", no_portaudio)
+    with pytest.raises(voice.VoiceUnavailable) as err:
+        voice.Microphone()
+    assert "PortAudio" in str(err.value) and "pip install" not in str(err.value)

@@ -162,7 +162,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
     if args.set:
-        from vector.config import set_config_value
+        from vector.config import ConfigError, set_config_value
 
         for item in args.set:
             key, sep, value = item.partition("=")
@@ -173,6 +173,9 @@ def main(argv: list[str] | None = None) -> int:
                 path = set_config_value(key.strip(), value.strip())
             except KeyError as exc:
                 print(f"{RED}{exc.args[0]}{RESET}")
+                return 1
+            except ConfigError as exc:
+                print(f"{RED}Not saved: {exc}{RESET}")
                 return 1
             print(f"Saved {key.strip()} = {value.strip()}  ({path})")
         return 0
@@ -214,6 +217,8 @@ def main(argv: list[str] | None = None) -> int:
         return prepare_voice()
 
     config = load_config()
+    for problem in config.problems:
+        print(f"{YELLOW}Settings: {problem}{RESET}")
     if args.provider:
         config.provider = args.provider
     if args.model:

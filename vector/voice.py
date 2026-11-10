@@ -29,6 +29,10 @@ NO_WORDS = {"no", "nope", "deny", "cancel", "stop", "don't"}
 WHISPER_HINT = "Vector, open Spotify and set the volume to 30."
 
 
+NO_PORTAUDIO = ("Voice can't reach this computer's sound system (PortAudio is missing). On Linux: "
+                "sudo apt install libportaudio2, then reopen VECTOR. Typing works fine meanwhile.")
+
+
 class VoiceUnavailable(RuntimeError):
     """Voice can't run here; the message says why and what to do."""
 
@@ -116,9 +120,11 @@ class Microphone:
     def __init__(self):
         try:
             import sounddevice as sd
-        except (ImportError, OSError) as exc:
+        except ImportError as exc:
             raise VoiceUnavailable(
                 'Voice needs extra packages: pip install "vector-assistant[voice]"') from exc
+        except OSError as exc:  # the package is there, but the sound system it uses isn't
+            raise VoiceUnavailable(NO_PORTAUDIO) from exc
         self._sd = sd
         self._queue: queue.Queue = queue.Queue(maxsize=300)
         self._stream = None

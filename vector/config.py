@@ -102,6 +102,9 @@ class Config:
     check_updates: bool = True
     skill_dirs: list[str] = field(default_factory=list)
 
+    def __post_init__(self):
+        self.problems: list[str] = []  # settings VECTOR couldn't use (shown to the user)
+
     @property
     def home(self) -> Path:
         return HOME_DIR
@@ -131,11 +134,57 @@ def config_path() -> Path:
     return Path(os.environ.get("VECTOR_CONFIG", HOME_DIR / "config.toml"))
 
 
-def _coerce(value: str, current):
+class ConfigError(ValueError):
+    """A setting with a value VECTOR can't use; the message says what's allowed."""
+
+
+TRUE_WORDS = {"1", "true", "yes", "on"}
+FALSE_WORDS = {"0", "false", "no", "off"}
+# Settings that only take certain words.
+CHOICES = {
+    "provider": ("auto", "anthropic", "claude", "openrouter", "ollama"),
+    "screen_access": ("ask", "always", "never"),
+    "effort": ("", "low", "medium", "high", "xhigh", "max"),
+}
+
+
+def _coerce(value: str, current, key: str = "setting"):
+    """Text (from --set or an environment variable) -> the setting's type. Raises ConfigError."""
     if isinstance(current, bool):
-        return value.strip().lower() in {"1", "true", "yes", "on"}
+        word = value.strip().lower()
+        if word in TRUE_WORDS:
+            return True
+        if word in FALSE_WORDS:
+            return False
+        raise ConfigError(f"{key} must be true or false (not '{value}').")
     if isinstance(current, list):
         return [v for v in value.split(os.pathsep) if v]
+    return value
+
+
+def check_value(key: str, value):
+    """Return the value if VECTOR can use it for this setting; raise ConfigError if not."""
+    default = getattr(Config(), key)
+    if isinstance(default, bool):
+        if not isinstance(value, bool):
+            raise ConfigError(f"{key} must be true or false (not {value!r}).")
+        return value
+    if isinstance(default, list):
+        if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+            raise ConfigError(f"{key} must be a list of folder names, like [\"C:/my skills\"].")
+        return value
+    if not isinstance(value, str):
+        raise ConfigError(f"{key} must be text in quotes, like {key} = \"{default}\" (not {value!r}).")
+    if key in CHOICES and value.strip().lower() not in CHOICES[key]:
+        allowed = ", ".join(c or '"" (default)' for c in CHOICES[key])
+        raise ConfigError(f"{key} can be {allowed} (not '{value}').")
+    if key == "hotkey":
+        from vector.hotkey import HotkeyError, parse_hotkey
+
+        try:
+            parse_hotkey(value)
+        except HotkeyError as exc:
+            raise ConfigError(f"hotkey '{value}' won't work: {exc}. Example: ctrl+shift+space") from exc
     return value
 
 
@@ -146,16 +195,29 @@ def load_config(path: Path | None = None) -> Config:
     cfg = Config()
     path = path or config_path()
     if path.exists():
-        with path.open("rb") as fh:
-            data = tomllib.load(fh)
+        try:
+            with path.open("rb") as fh:
+                data = tomllib.load(fh)
+        except (tomllib.TOMLDecodeError, OSError, UnicodeDecodeError) as exc:
+            # One typo shouldn't stop VECTOR from opening: use the standard settings and say so.
+            data = {}
+            cfg.problems.append(f"Your settings file has a mistake ({exc}), so VECTOR is using its "
+                                f"standard settings. Fix or delete it: {path}")
         known = {f.name for f in fields(Config)}
         for key, value in data.items():
-            if key in known:
-                setattr(cfg, key, value)
+            if key not in known:
+                continue
+            try:
+                setattr(cfg, key, check_value(key, value))
+            except ConfigError as exc:
+                cfg.problems.append(f"{exc} Using the standard value instead. ({path})")
     for f in fields(Config):
         env = os.environ.get(f"VECTOR_{f.name.upper()}")
         if env is not None:
-            setattr(cfg, f.name, _coerce(env, getattr(cfg, f.name)))
+            try:
+                setattr(cfg, f.name, check_value(f.name, _coerce(env, getattr(cfg, f.name), f.name)))
+            except ConfigError as exc:
+                cfg.problems.append(f"VECTOR_{f.name.upper()}: {exc}")
     return cfg
 
 
@@ -174,7 +236,7 @@ def set_config_value(key: str, value: str, path: Path | None = None) -> Path:
     if key not in known:
         raise KeyError(f"Unknown setting '{key}'. Settings: {', '.join(known)}")
     default = getattr(Config(), key)
-    parsed = _coerce(value, default)
+    parsed = check_value(key, _coerce(value, default, key))
     if isinstance(parsed, bool):
         literal = "true" if parsed else "false"
     elif isinstance(parsed, list):
